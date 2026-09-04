@@ -1,0 +1,69 @@
+{
+  "$comment": "Decodable word banks per level, used by the mock story generator and for hand-written story checks. Every word MUST parse with graphemes taught at this level or earlier — the core test suite enforces this, the same way it enforces the phonics scope examples. Categories feed the template slots of the mock generator.",
+  "banks": {
+    "1": {
+      "nouns": ["ant", "pin", "tin", "nap", "pit", "tip", "pan", "nip"],
+      "verbs": ["sit", "tap", "sip", "pat", "spin"],
+      "names": ["Tan", "Nia"],
+      "settings": ["pit", "tin"],
+      "adjectives": ["tan"],
+      "sentenceBits": ["in", "it", "is", "an", "at", "as", "tip", "sip"]
+    },
+    "2": {
+      "nouns": ["cat", "dog", "cup", "map", "hen", "duck", "sock", "mop", "sun", "den", "cot", "rug", "mud", "nut", "gum", "dot", "man", "mat", "dam", "mend", "mod", "lap", "leg", "lid", "lip"],
+      "verbs": ["run", "get", "met", "put", "ran", "dug", "mug", "mend"],
+      "names": ["Mack", "Dana"],
+      "settings": ["den", "cot"],
+      "adjectives": ["red"],
+      "sentenceBits": ["can", "the", "a", "on", "up", "got", "see", "me", "not"]
+    },
+    "3": {
+      "nouns": ["bag", "fan", "ball", "bus", "jam", "zip", "fox", "bell", "web", "van", "box", "hut", "bed", "wig", "wasp", "job", "wax", "fin", "fun", "moss", "miss", "quiz", "quilt"],
+      "verbs": ["jog", "wag", "fix", "buzz", "hug", "jab", "win", "puff", "huff", "buff", "hiss", "fuss"],
+      "names": ["Jaff", "Vina", "Will"],
+      "settings": ["hut", "van", "web"],
+      "adjectives": ["big", "wet", "sad", "fun", "hot"],
+      "sentenceBits": ["can", "the", "to", "go", "no", "had", "has", "him", "his", "well", "will", "oh"]
+    },
+    "4": {
+      "nouns": ["chip", "shop", "ring", "sink", "ship", "bath", "song", "pink", "bench", "moth", "dish", "dock", "hand", "wind"],
+      "verbs": ["chat", "wish", "think", "ring", "shut", "sing", "hug"],
+      "names": ["Chen", "Shila"],
+      "settings": ["shop", "ship", "bath"],
+      "adjectives": ["thin", "long", "glad"],
+      "sentenceBits": ["she", "he", "was", "the", "with", "that", "this", "than", "then", "sit", "big"]
+    },
+    "5": {
+      "nouns": ["rain", "feet", "night", "boat", "moon", "star", "fork", "fur", "cow", "coin", "corn", "storm", "tail", "road", "farm", "town"],
+      "verbs": ["boil", "float", "growl", "jump"],
+      "names": ["Ravi", "Meena"],
+      "settings": ["boat", "farm", "road"],
+      "adjectives": ["dark", "warm", "far", "fast"],
+      "sentenceBits": ["said", "are", "all", "down", "look", "now", "not", "but"]
+    },
+    "6": {
+      "nouns": ["day", "toe", "paw", "ear", "hair", "fern", "soup", "house", "mouse", "mouth", "picture", "tray", "hay", "cue", "glue", "lure", "goat", "soap", "flour"],
+      "verbs": ["hear", "play", "wear", "pour", "grow", "chew", "cure"],
+      "names": ["Bea", "Ray"],
+      "settings": ["bay", "hay", "house"],
+      "adjectives": ["new", "old", "fair", "slow", "blue", "pure"],
+      "sentenceBits": ["they", "there", "once", "out", "here", "will", "said"]
+    },
+    "7": {
+      "nouns": ["flag", "crab", "drum", "swing", "lamp", "hand", "tent", "gift", "stop", "frog", "trap", "snow", "milk", "sand", "plum", "black", "street", "pond", "clod", "brick", "frost", "grass", "train", "spot", "sled", "flower", "glow"],
+      "verbs": ["clap", "skip", "spin", "swim", "grab", "trim", "stand", "stamp"],
+      "names": ["Bram", "Tess"],
+      "settings": ["pond", "street", "shop"],
+      "adjectives": ["brisk", "glad", "grand"],
+      "sentenceBits": ["what", "when", "where", "then", "and", "but", "will"]
+    },
+    "8": {
+      "nouns": ["knot", "knee", "lamb", "comb", "gnat", "wrist", "wrap", "sign", "crumb", "knit"],
+      "verbs": ["knit", "wrap", "comb", "sign", "kneel"],
+      "names": ["Nell", "Wren"],
+      "settings": ["comb", "den"],
+      "adjectives": ["small", "still"],
+      "sentenceBits": ["who", "could", "would", "then", "and", "will"]
+    }
+  }
+}

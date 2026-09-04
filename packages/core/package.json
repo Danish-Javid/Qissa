@@ -1,0 +1,24 @@
+{
+  "name": "@qissa/core",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Qissa pedagogy core — deterministic state machines and data. Runs identically on the server and in the browser (offline mode). No LLM discretion, ever (NFR-8.4).",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "test": "vitest run",
+    "test:watch": "vitest"
+  },
+  "devDependencies": {
+    "typescript": "^5.9.2",
+    "vitest": "^3.2.4"
+  }
+}

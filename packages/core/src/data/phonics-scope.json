@@ -1,0 +1,61 @@
+{
+  "$comment": "Qissa phonics scope-and-sequence. NFR-8.1: this is DATA, not code — editable without a deploy. Eight levels modelled on a systematic synthetic phonics sequence. Every example word must parse using only graphemes taught in this level or earlier; the core test suite enforces that on every change.",
+  "levels": [
+    {
+      "level": 1,
+      "name": "First sounds",
+      "graphemes": ["s", "a", "t", "p", "i", "n"],
+      "trickyWords": [],
+      "examples": ["sat", "sit", "pin", "tip", "tap", "nap", "sip", "pit", "ant", "tin"]
+    },
+    {
+      "level": 2,
+      "name": "More short vowels",
+      "graphemes": ["m", "d", "g", "o", "c", "k", "ck", "e", "u", "r", "h", "l"],
+      "trickyWords": ["the", "I", "a", "see", "me", "no", "go", "to"],
+      "examples": ["cat", "dog", "mop", "cup", "red", "hen", "duck", "sock", "map", "sun"]
+    },
+    {
+      "level": 3,
+      "name": "Consonant set complete",
+      "graphemes": ["b", "f", "ff", "ll", "ss", "j", "v", "w", "x", "z", "zz", "qu"],
+      "trickyWords": [],
+      "examples": ["bag", "mug", "ball", "bus", "wet", "jam", "zip", "fox", "quiz", "bell"]
+    },
+    {
+      "level": 4,
+      "name": "First digraphs",
+      "graphemes": ["ch", "sh", "th", "ng", "nk"],
+      "trickyWords": ["she", "he", "was"],
+      "examples": ["chip", "shop", "thin", "ring", "sink", "chat", "ship", "bath", "song", "pink"]
+    },
+    {
+      "level": 5,
+      "name": "Long vowels",
+      "graphemes": ["ai", "ee", "igh", "oa", "oo", "ar", "or", "ur", "ow", "oi"],
+      "trickyWords": ["said", "are", "all"],
+      "examples": ["rain", "feet", "night", "boat", "moon", "star", "fork", "fur", "cow", "coin"]
+    },
+    {
+      "level": 6,
+      "name": "More vowel spellings",
+      "graphemes": ["ear", "air", "ure", "er", "ay", "oe", "ue", "aw", "ew", "ou"],
+      "trickyWords": ["they", "there", "once"],
+      "examples": ["dear", "hair", "cure", "fern", "day", "toe", "cue", "paw", "new", "soup"]
+    },
+    {
+      "level": 7,
+      "name": "Adjacent consonants",
+      "graphemes": ["bl", "cl", "fl", "gl", "pl", "sl", "br", "cr", "dr", "fr", "gr", "tr", "st", "sk", "sp", "sn", "sw", "mp", "nd", "nt", "ft", "lk"],
+      "trickyWords": ["what", "when", "where"],
+      "examples": ["flag", "stop", "crab", "drum", "grass", "swing", "lamp", "hand", "tent", "gift"]
+    },
+    {
+      "level": 8,
+      "name": "Silent letters and beyond",
+      "graphemes": ["kn", "wr", "mb", "gn"],
+      "trickyWords": ["who", "could", "would"],
+      "examples": ["knot", "wrap", "lamb", "gnat", "knee", "wrist", "comb", "sign"]
+    }
+  ]
+}

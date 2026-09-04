@@ -1,0 +1,222 @@
+// ============================================================================
+// Qissa data model.
+//
+// Design rules:
+//  - Children never authenticate (FR-A.1): a Parent owns one or more Child
+//    records; every child-scoped route first proves parent ownership.
+//  - LearnerModel.state is the @qissa/core LearnerModel as JSON with a
+//    schemaVersion so future engine changes can migrate stored models.
+//  - AuditLog is append-only: the application only ever INSERTs here
+//    (FR-I.9). No update path, no delete path.
+//  - costMicroUsd on ReadingSession is the NFR-4.4 cost instrumentation:
+//    every vendor call during a session adds its price here.
+// ============================================================================
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Parent {
+  id           String   @id @default(cuid())
+  email        String   @unique
+  // Argon2id hash. Never the password, never a reversible cipher.
+  passwordHash String
+  // Set once, at consent time (NFR-3). Shown back in the digest screen.
+  consentGivenAt DateTime?
+  createdAt    DateTime @default(now())
+
+  children     Child[]
+  sessions     AuthSession[]
+
+  @@map("parents")
+}
+
+// Server-side session bound to the HttpOnly cookie. Stored in the DB so we
+// can revoke sessions and enforce expiry without any client-side secret.
+model AuthSession {
+  id         String   @id // 32 random bytes, hex — the cookie value
+  parentId   String
+  parent     Parent   @relation(fields: [parentId], references: [id], onDelete: Cascade)
+  // CSRF double-submit token: returned to the client at login, required as
+  // an X-CSRF-Token header on every authenticated mutating request.
+  csrfToken  String
+  userAgent  String?
+  createdAt  DateTime @default(now())
+  expiresAt  DateTime
+
+  @@index([parentId])
+  @@map("auth_sessions")
+}
+
+model Child {
+  id        String   @id @default(cuid())
+  parentId  String
+  parent    Parent   @relation(fields: [parentId], references: [id], onDelete: Cascade)
+  name      String
+  birthDate DateTime // drives age-adapted prompt density (FR-D.3)
+  // The parent's world seed — canon for every story this child gets.
+  worldSeed Json
+  // Per-child parental controls over the three modes: learning-track override,
+  // Story Time pacing + enable, session cap. Null = age defaults. The typed
+  // shape is @qissa/core ChildSettings; readers ignore unknown fields so the
+  // column is forward-compatible without another migration.
+  settings  Json?
+  createdAt DateTime @default(now())
+
+  learnerModel   LearnerModel?
+  readingSessions ReadingSession[]
+  stories        Story[]
+  distressAlerts DistressAlert[]
+
+  @@index([parentId])
+  @@map("children")
+}
+
+model LearnerModel {
+  id      String @id @default(cuid())
+  childId String @unique
+  child   Child  @relation(fields: [childId], references: [id], onDelete: Cascade)
+  // Version of the core LearnerModel shape stored below (currently 1).
+  schemaVersion Int   @default(1)
+  state         Json
+  updatedAt     DateTime @updatedAt
+
+  @@map("learner_models")
+}
+
+model Story {
+  id      String @id @default(cuid())
+  childId String
+  child   Child  @relation(fields: [childId], references: [id], onDelete: Cascade)
+  level   Int
+  title   String
+  theme   String
+  targetGrapheme String
+  // 'generated' | 'cache' — cache means the fail-closed fallback served it.
+  source  String
+  // The full Story object (pages, choice, offlineTask) as JSON.
+  content Json
+  // Generator + model + promptVersion + every pipeline decision, so the
+  // digest screen can show WHY this story passed (FR-I.9).
+  provenance Json
+  createdAt DateTime @default(now())
+
+  readingSessions ReadingSession[]
+
+  @@index([childId])
+  @@map("stories")
+}
+
+model ReadingSession {
+  id       String @id @default(cuid())
+  childId  String
+  child    Child  @relation(fields: [childId], references: [id], onDelete: Cascade)
+  storyId  String?
+  story    Story? @relation(fields: [storyId], references: [id], onDelete: SetNull)
+
+  startedAt DateTime @default(now())
+  endedAt   DateTime?
+  // True when the server cut the session at SESSION_CAP_MINUTES (FR-H.1).
+  cappedByServer Boolean @default(false)
+  // Plan ritual + narrative close flags — the session shape is a promise.
+  planRitualDone     Boolean @default(false)
+  narrativeCloseDone Boolean @default(false)
+
+  wordsRead   Int     @default(0)
+  wordsCorrect Int    @default(0)
+  wordsPerMinute Float?
+  // Vendor spend for this session in micro-USD (NFR-4.4).
+  costMicroUsd Int    @default(0)
+  providerMode String @default("mock")
+
+  miscues Miscue[]
+  choices ChoiceEvent[]
+  audioClips AudioClip[]
+
+  @@index([childId])
+  @@map("reading_sessions")
+}
+
+model Miscue {
+  id        String @id @default(cuid())
+  sessionId String
+  session   ReadingSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  expected  String  // the word on the page
+  spoken    String? // what the recognizer heard (null on stall)
+  miscueType String // correct | substitution | omission | insertion | self-correction | hesitation
+  // The taught unit this miscue is logged against (FR-C.5); tricky words
+  // log against the whole word.
+  grapheme  String
+  ladderStep Int    @default(0)
+  // Accent allow-list applied BEFORE flagging (FR-G): true means the
+  // "error" was accepted as a regional variant.
+  accentApplied Boolean @default(false)
+  accentNote    String?
+  createdAt DateTime @default(now())
+
+  @@index([sessionId])
+  @@map("miscues")
+}
+
+model ChoiceEvent {
+  id        String @id @default(cuid())
+  sessionId String
+  session   ReadingSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  storyId   String?
+  prompt    String
+  // 0 or 1 — which of the two options the child chose.
+  chosenIndex Int
+  // The child's spoken "why", if she gave one (FR-E.4).
+  rationale String?
+  createdAt DateTime @default(now())
+
+  @@index([sessionId])
+  @@map("choice_events")
+}
+
+// Raw child audio, proxied server-side and NEVER sent for vendor training
+// (NFR-3). The retention job deletes rows + files after AUDIO_RETENTION_DAYS.
+model AudioClip {
+  id        String @id @default(cuid())
+  sessionId String
+  session   ReadingSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  path      String
+  createdAt DateTime @default(now())
+
+  @@index([createdAt])
+  @@map("audio_clips")
+}
+
+model DistressAlert {
+  id        String @id @default(cuid())
+  childId   String
+  child     Child  @relation(fields: [childId], references: [id], onDelete: Cascade)
+  sessionId String?
+  // Keyword class that fired; the raw utterance is NOT stored (child privacy).
+  category  String
+  severity  String
+  acknowledgedAt DateTime?
+  createdAt DateTime @default(now())
+
+  @@index([childId])
+  @@map("distress_alerts")
+}
+
+// Append-only. The API surface exposes create-only operations on this table.
+model AuditLog {
+  id        String @id @default(cuid())
+  event     String  // e.g. "story.rejected.decodability", "session.capped"
+  childId   String?
+  sessionId String?
+  detail    Json?
+  createdAt DateTime @default(now())
+
+  @@index([event])
+  @@index([createdAt])
+  @@map("audit_log")
+}

@@ -1,0 +1,17 @@
+{
+  "$comment": "The 12-week character theme curriculum (FR-E.4). One theme per story, rotating. The order is deliberate: courage first because the world seed's 'current challenge' field maps most often onto it, and the hardest themes (empathy, self-control) land after the child trusts the companion.",
+  "weeks": [
+    { "week": 1, "theme": "courage", "headline": "Being brave when things feel big", "challengeKeywords": ["dark", "scared", "afraid", "night"] },
+    { "week": 2, "theme": "sharing", "headline": "Making room for someone else", "challengeKeywords": ["sharing", "share", "toys"] },
+    { "week": 3, "theme": "patience", "headline": "Waiting without wobbling", "challengeKeywords": ["waiting", "wait", "turn"] },
+    { "week": 4, "theme": "honesty", "headline": "Telling what really happened", "challengeKeywords": ["lying", "truth"] },
+    { "week": 5, "theme": "kindness", "headline": "Noticing someone who needs a hand", "challengeKeywords": [] },
+    { "week": 6, "theme": "gratitude", "headline": "Saying thank-you and meaning it", "challengeKeywords": [] },
+    { "week": 7, "theme": "perseverance", "headline": "Trying again after a tumble", "challengeKeywords": [] },
+    { "week": 8, "theme": "apologising", "headline": "Saying sorry and fixing it", "challengeKeywords": ["sorry", "apologise"] },
+    { "week": 9, "theme": "curiosity", "headline": "Asking good questions", "challengeKeywords": [] },
+    { "week": 10, "theme": "teamwork", "headline": "Doing it together", "challengeKeywords": [] },
+    { "week": 11, "theme": "empathy", "headline": "Wondering how it feels for them", "challengeKeywords": [] },
+    { "week": 12, "theme": "self-control", "headline": "Stopping before the wobble wins", "challengeKeywords": [] }
+  ]
+}

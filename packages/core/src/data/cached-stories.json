@@ -1,0 +1,65 @@
+{
+  "$comment": "Three hand-written, hand-verified decodable stories (NFR-5.2 offline mode, and the fallback whenever generation fails — the pipeline is fail-closed). World-seed tokens {{hero}}, {{sibling}}, {{pet}}, {{city}} are substituted at serve time so even cached stories carry the child's real life as canon. The core test suite re-validates decodability of every page on every build.",
+  "stories": [
+    {
+      "title": "The Dog in the Mud",
+      "level": 2,
+      "targetGrapheme": "d",
+      "theme": "sharing",
+      "pages": [
+        { "text": "Tam can see the den. The den is in the mud.", "illustrationHint": "flat three-ink scene: a small den in mud, warm sun" },
+        { "text": "The den is a cot. A dog is on the cot.", "illustrationHint": "flat three-ink scene: a dog resting on a cot by the den" },
+        { "text": "The dog can not run. The dog is in the mud.", "illustrationHint": "flat three-ink scene: a muddy dog trying to get up" },
+        { "text": "I can get the dog up! Tam ran to the cot.", "illustrationHint": "flat three-ink scene: Tam running to help the dog" }
+      ],
+      "choice": {
+        "prompt": "The dog is on the cot. Can Tam sit on the cot?",
+        "options": ["Tam can sit on the cot. The dog can sit up on it.", "Tam can get a rug. The dog can sit on the rug."],
+        "consequenceForFirst": "Tam and the dog sat on the cot. The sun is up. The dog can run.",
+        "consequenceForSecond": "Tam got a rug. The dog ran to the rug. The dog is up. It can run."
+      },
+      "offlineTask": "Go and tell your grown-up what Tam did for the dog.",
+      "provenance": { "generator": "cache", "model": "none", "promptVersion": "cache-v1" }
+    },
+    {
+      "title": "The Web on the Hut",
+      "level": 3,
+      "targetGrapheme": "w",
+      "theme": "kindness",
+      "pages": [
+        { "text": "{{hero}} and {{sibling}} can see the web. The web is on the hut.", "illustrationHint": "flat three-ink scene: two children looking at a web on a hut wall" },
+        { "text": "A wasp is in the web. The wasp can not jump up.", "illustrationHint": "flat three-ink scene: a small wasp caught in the web" },
+        { "text": "Oh no! {{pet}} will wag and jump. We can fix it!", "illustrationHint": "flat three-ink scene: the pet wagging while the children point at the web" },
+        { "text": "{{hero}} and {{sibling}} ran to the hut. The web is still.", "illustrationHint": "flat three-ink scene: children tiptoeing to the hut" }
+      ],
+      "choice": {
+        "prompt": "The wasp is in the web. {{sibling}} can fix the web.",
+        "options": ["Fix the web. {{sibling}} can help.", "Run in the sun."],
+        "consequenceForFirst": "{{hero}} and {{sibling}} fix the web. The wasp can jump up. It is a big win!",
+        "consequenceForSecond": "{{hero}} runs in the sun. The wasp is still in the web. {{hero}} ran back to fix it."
+      },
+      "offlineTask": "Find something small and careful outside. Tell your grown-up about it.",
+      "provenance": { "generator": "cache", "model": "none", "promptVersion": "cache-v1" }
+    },
+    {
+      "title": "The Ship Song",
+      "level": 4,
+      "targetGrapheme": "th",
+      "theme": "patience",
+      "pages": [
+        { "text": "{{hero}} and {{pet}} can see the ship. The big ship is at the dock.", "illustrationHint": "flat three-ink scene: a ship at a dock with {{city}} shapes behind" },
+        { "text": "{{pet}} can think. Is the ship a gift to me? {{pet}} ran to the ship.", "illustrationHint": "flat three-ink scene: the pet running excitedly to the ship" },
+        { "text": "Not so fast. {{hero}} put a hand up. The ship is a bath ship. It must be scrubbed thin.", "illustrationHint": "flat three-ink scene: {{hero}} holding up a hand, bucket and brush nearby" },
+        { "text": "The ship was a gift to {{pet}}! {{pet}} can sit in the ship and sing.", "illustrationHint": "flat three-ink scene: the pet sitting proudly in the clean ship" }
+      ],
+      "choice": {
+        "prompt": "{{pet}} has the ship. The moth has no ship.",
+        "options": ["The moth can sit in the ship with {{pet}}.", "The ship is not big. The moth can not fit."],
+        "consequenceForFirst": "The moth sat in the ship. The ship ran with the wind. {{hero}} sang a song!",
+        "consequenceForSecond": "{{pet}} sat in the ship. The moth sat on the dock. The song was sad. Sit with me! The song was big and glad."
+      },
+      "offlineTask": "Go and sing a ship song with your grown-up.",
+      "provenance": { "generator": "cache", "model": "none", "promptVersion": "cache-v1" }
+    }
+  ]
+}

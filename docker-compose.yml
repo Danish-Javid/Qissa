@@ -1,0 +1,41 @@
+# Two services, one command: `docker compose up --build`.
+# The app image is built from the single Dockerfile at the repo root of app/.
+# Secrets come from .env (never committed); DATABASE_URL is overridden here
+# because inside the compose network the database host is "db", not localhost.
+
+services:
+  app:
+    build: .
+    ports:
+      - "3000:3000"
+    env_file:
+      - .env
+    environment:
+      # Override .env: within the compose network PostgreSQL is reachable as "db".
+      DATABASE_URL: postgresql://qissa:qissa@db:5432/qissa?schema=public
+    volumes:
+      # Child audio clips + generated illustrations persist across rebuilds,
+      # and the retention job prunes them on schedule.
+      - qissa-data:/srv/qissa/data-runtime
+    depends_on:
+      db:
+        condition: service_healthy
+
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: qissa
+      POSTGRES_PASSWORD: qissa
+      POSTGRES_DB: qissa
+    volumes:
+      - qissa-db:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U qissa -d qissa"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    # The database is internal-only: no host port is published.
+
+volumes:
+  qissa-data:
+  qissa-db:

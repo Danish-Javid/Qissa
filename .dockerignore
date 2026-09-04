@@ -1,0 +1,15 @@
+# Keep the build context small and secret-free.
+# NOTE: patterns without a slash match at ANY depth — these keep stale
+# workspace-local node_modules (e.g. Windows dev installs) out of the image,
+# where they would shadow the container's own installs.
+**/node_modules
+**/dist
+**/coverage
+.git
+.env
+.env.*
+!.env.example
+data-runtime
+*.log
+Dockerfile
+docker-compose.yml

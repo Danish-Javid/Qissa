@@ -1,0 +1,90 @@
+{
+  "$comment": "Urdu/Punjabi-accented English variants that MUST NOT be scored as errors (FR-C.7). Matched BEFORE anything is flagged. The list is data, not code: grow it as real sessions reveal variants. Each entry maps the expected word to transcriptions a child with a South Asian accent plausibly produces. NFR-2.2: bias hard toward NOT flagging — when in doubt, add the variant here.",
+  "variants": [
+    {
+      "expected": "very",
+      "accepted": ["wery", "werry"],
+      "note": "/v/~/w/ merger — the single most common Urdu/Punjabi feature"
+    },
+    {
+      "expected": "river",
+      "accepted": ["riwer", "riwar"],
+      "note": "/v/~/w/ merger"
+    },
+    {
+      "expected": "seven",
+      "accepted": ["sewen"],
+      "note": "/v/~/w/ merger"
+    },
+    {
+      "expected": "three",
+      "accepted": ["tree", "tiri"],
+      "note": "/θ/ -> /t/ (dental stop for voiceless th)"
+    },
+    {
+      "expected": "think",
+      "accepted": ["tink", "tinkh"],
+      "note": "/θ/ -> /t/"
+    },
+    {
+      "expected": "this",
+      "accepted": ["dis", "dis"],
+      "note": "/ð/ -> /d/"
+    },
+    {
+      "expected": "that",
+      "accepted": ["dat"],
+      "note": "/ð/ -> /d/"
+    },
+    {
+      "expected": "then",
+      "accepted": ["den"],
+      "note": "/ð/ -> /d/"
+    },
+    {
+      "expected": "they",
+      "accepted": ["dey"],
+      "note": "/ð/ -> /d/"
+    },
+    {
+      "expected": "brother",
+      "accepted": ["broder", "bruder"],
+      "note": "/ð/ -> /d/"
+    },
+    {
+      "expected": "mother",
+      "accepted": ["moder", "modar"],
+      "note": "/ð/ -> /d/, schwa realised as /a/"
+    },
+    {
+      "expected": "father",
+      "accepted": ["fader", "fadar"],
+      "note": "/ð/ -> /d/, schwa realised as /a/"
+    },
+    {
+      "expected": "water",
+      "accepted": ["watar", "woter"],
+      "note": "schwa realised as /a/"
+    },
+    {
+      "expected": "school",
+      "accepted": ["iskool", "iskul"],
+      "note": "epenthetic vowel before initial s+consonant cluster"
+    },
+    {
+      "expected": "street",
+      "accepted": ["istreet", "istirite"],
+      "note": "epenthetic vowel before initial s+consonant cluster"
+    },
+    {
+      "expected": "one",
+      "accepted": ["wan"],
+      "note": "common L2 realisation"
+    },
+    {
+      "expected": "just",
+      "accepted": ["jast"],
+      "note": "schwa realised as /a/"
+    }
+  ]
+}

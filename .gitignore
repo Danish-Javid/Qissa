@@ -1,0 +1,32 @@
+# Dependencies and build output — never committed; reproducible via package-lock.json
+node_modules/
+dist/
+coverage/
+
+# Environment files are the single most dangerous file in this repo.
+# This app processes children's voice data and vendor API keys; a leaked .env
+# is a privacy incident. Only .env.example (which holds no secrets) is committed.
+.env
+.env.*
+!.env.example
+
+# Runtime data: audio clips, generated illustrations, SQLite scratch files.
+# Audio retention is enforced server-side; nothing should ever live in git.
+# Anchored to the repo root: packages/core/src/data is the curriculum, not runtime.
+/data/
+data-runtime/
+*.log
+
+# Editor and OS noise
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+
+# Local diagnostic scratch from manual vendor tests - never part of the product.
+diag-clip.wav
+flux-test.png
+illustration-styled.png
+
+# Prisma — generated client is derived from schema.prisma, never committed
+packages/server/prisma/generated/
