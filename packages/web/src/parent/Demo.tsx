@@ -15,6 +15,7 @@ import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { api, ApiError } from '../api/client.js';
 import { LanguageToggle } from '../i18n/LanguageToggle.js';
+import { ParentPage } from './ParentPage.js';
 
 interface SeedResponse {
   childId: string;
@@ -59,7 +60,7 @@ export function Demo() {
   }
 
   return (
-    <div className="mx-auto max-w-3xl space-y-6 p-6">
+    <ParentPage className="mx-auto max-w-3xl space-y-6 p-6">
       <header className="rounded-3xl bg-ink px-6 py-5 text-white shadow">
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div>
@@ -156,6 +157,6 @@ export function Demo() {
           </ol>
         </section>
       )}
-    </div>
+    </ParentPage>
   );
 }

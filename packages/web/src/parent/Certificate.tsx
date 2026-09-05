@@ -17,6 +17,7 @@ import type { DigestResponse } from '../api/types.js';
 import { LanguageToggle } from '../i18n/LanguageToggle.js';
 import { useLocale } from '../i18n/LocaleProvider.js';
 import { ShareButton } from './ShareButton.js';
+import { ParentPage } from './ParentPage.js';
 
 export function Certificate() {
   const { childId } = useParams();
@@ -74,7 +75,7 @@ export function Certificate() {
   }
 
   return (
-    <div className="mx-auto max-w-3xl space-y-5 p-6">
+    <ParentPage className="mx-auto max-w-3xl space-y-5 p-6">
       {/* Controls — hidden on paper. */}
       <div className="no-print flex flex-wrap items-center justify-between gap-3">
         <Link to={`/parent/digest/${childId}`} className="text-sm text-leaf underline">
@@ -147,6 +148,6 @@ export function Certificate() {
           @page { margin: 14mm; }
         }
       `}</style>
-    </div>
+    </ParentPage>
   );
 }

@@ -408,7 +408,9 @@ export function EarlyPlayer({ childId, mockMode, onDone }: Props) {
               ))}
             </div>
             <Buddy mood={mood} size={170} />
-            <div className="bubble max-w-lg text-xl font-semibold">{caption}</div>
+            <div className="bubble max-w-lg text-xl font-semibold" role="status" aria-live="polite">
+              {caption}
+            </div>
             <ParentCoach word={round.targetWord} mode={quizResolved ? 'praise' : 'find'} />
           </div>
         </div>
@@ -478,7 +480,9 @@ export function EarlyPlayer({ childId, mockMode, onDone }: Props) {
 
         {/* Grown-up caption — co-viewing support, never load-bearing for the
             child (they do not need to read anything to play). */}
-        <div className="bubble max-w-lg text-xl font-semibold">{caption}</div>
+        <div className="bubble max-w-lg text-xl font-semibold" role="status" aria-live="polite">
+              {caption}
+            </div>
         {card !== undefined && phase === 'card' && (
           <ParentCoach word={card.word} mode={coachMode} />
         )}

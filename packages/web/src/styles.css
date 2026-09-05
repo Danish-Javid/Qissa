@@ -289,6 +289,9 @@ details.faq[open] .faq-chev { transform: rotate(180deg); }
 }
 .input-parent {
   @apply w-full rounded-lg border border-ink/20 bg-white px-3 py-2 text-sm outline-none focus:border-leaf;
+  /* outline-none above removes the UA ring; :focus-visible below puts a
+     stronger one back. Without that pairing a keyboard user loses the caret
+     entirely on these fields. */
 }
 
 /* Respect reduced-motion preferences for ALL decorative movement; the
@@ -319,5 +322,70 @@ details.faq[open] .faq-chev { transform: rotate(180deg); }
   .card-lift:hover {
     transform: none;
     transition: none;
+  }
+}
+
+/* ---------------------------------------------------------------- focus
+   A visible focus indicator on every interactive element, keyboard-only.
+
+   :focus-visible (not :focus) so a child's tap never paints a ring the
+   parent has to explain, while a keyboard or switch user always knows where
+   they are. The ring is drawn with outline + offset rather than box-shadow so
+   it survives on top of the rounded, coloured buttons this app is made of,
+   and it uses currentColor's contrast partner (ink) rather than the browser
+   default, which is invisible on the leaf and clay fills.
+
+   WCAG 2.4.7 / 2.4.11: the app previously set outline-none on form fields and
+   never restored an equivalent, so keyboard focus was untrackable. */
+:focus-visible {
+  /* Longhand with literal colours, not the `outline` shorthand and not a
+     theme var: the shorthand resets outline-color to currentColor if any part
+     of it fails to resolve, and the buttons in the coloured headers carry
+     text-white/70 -- so a ring that fell back to currentColor came out at 70%
+     alpha and lost its contrast against the fill it sits on. */
+  outline-style: solid;
+  outline-width: 3px;
+  outline-color: #264653;
+  outline-offset: 3px;
+  border-radius: 4px;
+}
+
+/* On the coloured headers the ink ring disappears into the background. */
+.bg-ink :focus-visible,
+.bg-leaf :focus-visible,
+.bg-clay :focus-visible {
+  outline-color: #ffffff;
+}
+
+/* Skip link — the first tab stop on every parent screen, visible only when
+   focused. The child screens deliberately have none: there is no navigation
+   to skip, and nothing there should respond to a stray tab. */
+.skip-link {
+  position: absolute;
+  left: -9999px;
+  top: 0;
+  z-index: 50;
+}
+.skip-link:focus {
+  left: 0.75rem;
+  top: 0.75rem;
+  background: var(--color-ink);
+  color: #fff;
+  padding: 0.5rem 0.9rem;
+  border-radius: 0.75rem;
+  font-size: 0.875rem;
+  font-weight: 600;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  /* Catch-all for anything not named in the list above, including future
+     components: no decorative motion should outlive this preference. */
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
   }
 }

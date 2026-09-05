@@ -17,6 +17,7 @@ import { modeLabel } from '@qissa/core';
 import { api } from '../api/client.js';
 import type { ChildSummary, MeResponse } from '../api/types.js';
 import { LanguageToggle } from '../i18n/LanguageToggle.js';
+import { ParentPage } from './ParentPage.js';
 
 /** The primer scope — what a Qissa story teaches besides letters. Each
  *  line says HOW honestly (picture-walk talk / art / home mission), never
@@ -75,7 +76,7 @@ export function Dashboard() {
   }
 
   return (
-    <div className="mx-auto max-w-4xl space-y-6 p-6">
+    <ParentPage className="mx-auto max-w-4xl space-y-6 p-6">
       <header className="flex flex-wrap items-center justify-between gap-3 rounded-3xl bg-leaf px-6 py-5 text-white shadow">
         <div className="flex items-center gap-4">
           <img src="/landing/buddy.png" alt="" className="h-14 w-14 rounded-2xl bg-white/20 p-1" />
@@ -265,6 +266,6 @@ export function Dashboard() {
         </Link>
         <span className="text-ink/40">Voice consent: {me?.consentGivenAt ? 'given' : 'not given'}</span>
       </footer>
-    </div>
+    </ParentPage>
   );
 }

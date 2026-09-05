@@ -11,6 +11,7 @@ import { Link } from 'react-router-dom';
 import { api } from '../api/client.js';
 import { ConnectionBadge } from '../lib/ConnectionBadge.js';
 import type { MetricsResponse } from '../api/types.js';
+import { ParentPage } from './ParentPage.js';
 
 export function Pipeline() {
   const [metrics, setMetrics] = useState<MetricsResponse | null>(null);
@@ -22,7 +23,7 @@ export function Pipeline() {
   const percent = (n: number | null): string => (n === null ? '—' : `${Math.round(n * 100)}%`);
 
   return (
-    <div className="mx-auto max-w-4xl space-y-6 p-6">
+    <ParentPage className="mx-auto max-w-4xl space-y-6 p-6">
       <header className="rounded-3xl bg-ink px-6 py-5 text-white shadow">
         <h1 className="font-story text-2xl font-bold">Under the hood — pipeline honesty</h1>
         <p className="mt-1 text-sm text-white/75">
@@ -60,7 +61,7 @@ export function Pipeline() {
           </div>
         </section>
       )}
-    </div>
+    </ParentPage>
   );
 }
 

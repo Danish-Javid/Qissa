@@ -15,6 +15,7 @@ import { api } from '../api/client.js';
 import type { DigestResponse } from '../api/types.js';
 import { LanguageToggle } from '../i18n/LanguageToggle.js';
 import { useLocale } from '../i18n/LocaleProvider.js';
+import { ParentPage } from './ParentPage.js';
 
 export function Digest() {
   const { childId } = useParams();
@@ -47,7 +48,7 @@ export function Digest() {
   const learner = digest.learner;
 
   return (
-    <div className="mx-auto max-w-3xl space-y-6 p-6">
+    <ParentPage className="mx-auto max-w-3xl space-y-6 p-6">
       <header className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold">{tr('digest.title', { name: digest.child.name })}</h1>
@@ -282,7 +283,7 @@ export function Digest() {
           </ul>
         )}
       </section>
-    </div>
+    </ParentPage>
   );
 }
 
