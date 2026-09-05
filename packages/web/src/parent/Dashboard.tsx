@@ -16,6 +16,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { modeLabel } from '@qissa/core';
 import { api } from '../api/client.js';
 import type { ChildSummary, MeResponse } from '../api/types.js';
+import { LanguageToggle } from '../i18n/LanguageToggle.js';
 
 /** The primer scope — what a Qissa story teaches besides letters. Each
  *  line says HOW honestly (picture-walk talk / art / home mission), never
@@ -83,9 +84,15 @@ export function Dashboard() {
             <p className="text-sm text-white/85">Your child's living primer — {me?.email ?? '…'}</p>
           </div>
         </div>
-        <button type="button" className="rounded-xl bg-white/20 px-4 py-2 text-sm font-semibold hover:bg-white/30" onClick={() => void logout()}>
-          Sign out
-        </button>
+        <div className="flex items-center gap-3">
+          {/* The language switch lives in the dashboard header because that is
+              the first parent surface after sign-in — an Urdu-reading parent
+              should not have to reach the digest to find it. */}
+          <LanguageToggle tone="dark" />
+          <button type="button" className="rounded-xl bg-white/20 px-4 py-2 text-sm font-semibold hover:bg-white/30" onClick={() => void logout()}>
+            Sign out
+          </button>
+        </div>
       </header>
 
       <section className="rounded-2xl bg-white p-6 shadow">

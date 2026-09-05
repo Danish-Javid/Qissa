@@ -2,7 +2,7 @@
 # on every push and pull request so a red branch can never reach the demo.
 #
 # Job layout is deliberate:
-#   verify  — lint + unit tests + build, the fast feedback loop (~2 min)
+#   verify  — lint + unit tests (core, server, web) + build (~3 min)
 #   docker  — proves `docker compose up --build` still works, which is the
 #             single command the judges will run; a broken Dockerfile is a
 #             demo-day failure that unit tests cannot catch

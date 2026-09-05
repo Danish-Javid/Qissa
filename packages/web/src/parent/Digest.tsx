@@ -50,13 +50,12 @@ export function Digest() {
     <div className="mx-auto max-w-3xl space-y-6 p-6">
       <header className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold">{digest.child.name} — the story of their learning</h1>
-          <p className="mt-1 text-sm text-ink/60">
-            Sounds and words are the first chapter — every session also wove in spoken language,
-            the wider world and a mission for home.
-          </p>
+          <h1 className="text-2xl font-bold">{tr('digest.title', { name: digest.child.name })}</h1>
+          <p className="mt-1 text-sm text-ink/60">{tr('digest.subtitle')}</p>
           <p className="text-sm text-ink/60">
-            Voice consent: {digest.child.consentGivenAt ? `given ${formatDate(digest.child.consentGivenAt)}` : 'not given — no audio is stored'}
+            {digest.child.consentGivenAt
+              ? tr('digest.consentGiven', { date: formatDate(digest.child.consentGivenAt) })
+              : tr('digest.consentMissing')}
           </p>
         </div>
         <div className="flex items-center gap-3">
@@ -69,20 +68,23 @@ export function Digest() {
 
       {/* Learner model — what the engine currently believes the child knows. */}
       <section className="rounded-2xl bg-white p-6 shadow">
-        <h2 className="mb-3 text-lg font-bold">Phonics knowledge</h2>
+        <h2 className="mb-3 text-lg font-bold">{tr('digest.phonics')}</h2>
         {learner === null ? (
-          <p className="text-sm text-ink/60">No reading yet — the first story will teach the first sounds.</p>
+          <p className="text-sm text-ink/60">{tr('digest.noPhonics')}</p>
         ) : (
           <>
             <p className="mb-3 text-sm text-ink/60">
-              Level {learner.currentLevel} · {learner.vocabularyCount} decodable words unlocked
+              {tr('digest.levelLine', {
+                level: num(learner.currentLevel),
+                count: num(learner.vocabularyCount)
+              })}
             </p>
             <GraphemeRow label={tr('digest.mastered')} graphemes={learner.mastered} tone="bg-leaf/15 text-leaf" />
             <GraphemeRow label={tr('digest.learning')} graphemes={learner.learning} tone="bg-gold/20 text-gold" />
             <GraphemeRow label={tr('digest.reteach')} graphemes={learner.reteach} tone="bg-clay/10 text-clay" />
             {learner.fluency.length > 0 && (
               <div className="mt-4">
-                <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-ink/50">Fluency trend (words/min)</p>
+                <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-ink/50">{tr('digest.fluencyTrend')}</p>
                 <div className="flex flex-wrap gap-2">
                   {learner.fluency.map((point) => (
                     <span key={point.at} className="rounded-lg bg-paper px-2 py-1 text-sm">
@@ -98,9 +100,9 @@ export function Digest() {
 
       {/* Sessions — one row per reading, cap flags visible to the parent. */}
       <section className="rounded-2xl bg-white p-6 shadow">
-        <h2 className="mb-3 text-lg font-bold">Sessions</h2>
+        <h2 className="mb-3 text-lg font-bold">{tr('digest.sessions')}</h2>
         {digest.sessions.length === 0 ? (
-          <p className="text-sm text-ink/60">No sessions yet.</p>
+          <p className="text-sm text-ink/60">{tr('digest.noSessions')}</p>
         ) : (
           <table className="w-full text-left text-sm">
             <thead>

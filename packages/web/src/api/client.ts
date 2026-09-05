@@ -15,6 +15,7 @@
 import type { AuthResponse } from './types.js';
 
 const CSRF_KEY = 'qissa.csrf';
+const LOGIN_PATH = '/parent/login';
 
 export function setCsrfToken(token: string): void {
   sessionStorage.setItem(CSRF_KEY, token);
@@ -69,8 +70,16 @@ async function request<T>(method: 'GET' | 'POST', path: string, body?: unknown):
     // Only redirect parent surfaces; the child loop never authenticates
     // itself — its parent session simply expired mid-story, and the
     // child home shows a gentle "hand the device to a grown-up" screen.
-    if (window.location.pathname.startsWith('/parent')) {
-      window.location.assign('/parent/login');
+    //
+    // The login page is excluded, and that exclusion is load-bearing: the app
+    // probes GET /auth/me on every load, which 401s for a signed-out visitor.
+    // Redirecting to /parent/login from /parent/login is a location.assign()
+    // to the current URL — a full reload — which probes again, 401s again, and
+    // reloads again. That loop hammered the server ~40 times in seconds and
+    // then tripped the global rate limiter, leaving a bare JSON error where
+    // the sign-in form should be.
+    if (window.location.pathname.startsWith('/parent') && window.location.pathname !== LOGIN_PATH) {
+      window.location.assign(LOGIN_PATH);
     }
     throw new ApiError(401, null);
   }

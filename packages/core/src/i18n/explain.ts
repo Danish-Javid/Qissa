@@ -51,7 +51,17 @@ export interface StoryExplanation {
   checks: ExplanationLine[];
 }
 
-/** Gate name (as written by the story engine) -> message keys. */
+/**
+ * Gate name -> message keys.
+ *
+ * The engine namespaces each verdict by the STAGE that produced it --
+ * `generator.decodability`, `warm-cache.page-count` -- so that a story's
+ * provenance shows which rung of the ladder rejected it, not merely that
+ * something did. The parent does not care which rung ran the check (the
+ * source line above already says where the text came from), so the stage
+ * prefix is stripped before lookup. Bare names are also accepted: the
+ * generator's own self-validation records them unprefixed.
+ */
 const GATE_KEYS: Record<string, { pass: MessageKey; fail: MessageKey }> = {
   decodability: { pass: 'explain.gateDecodability', fail: 'explain.gateDecodabilityFailed' },
   'content-filter': { pass: 'explain.gateContentFilter', fail: 'explain.gateContentFilterFailed' },
@@ -59,6 +69,19 @@ const GATE_KEYS: Record<string, { pass: MessageKey; fail: MessageKey }> = {
   'target-density': { pass: 'explain.gateTargetDensity', fail: 'explain.gateTargetDensityFailed' },
   'review-density': { pass: 'explain.gateReviewDensity', fail: 'explain.gateReviewDensityFailed' }
 };
+
+/** Stage markers that are not gates: they narrate the ladder itself. */
+const STAGE_KEYS: Record<string, MessageKey> = {
+  'generator.available': 'explain.generatorUnavailable',
+  'fallback.cache': 'explain.fallbackCache',
+  'fallback.deterministic': 'explain.fallbackDeterministic'
+};
+
+/** Strip the stage namespace: "generator.page-count" -> "page-count". */
+function gateName(check: string): string {
+  const dot = check.indexOf('.');
+  return dot === -1 ? check : check.slice(dot + 1);
+}
 
 const SOURCE_KEYS: Record<StoryExplanationInput['source'], MessageKey> = {
   generated: 'explain.sourceGenerated',
@@ -92,7 +115,15 @@ export function explainStory(locale: Locale, input: StoryExplanationInput): Stor
       : null;
 
   const checks: ExplanationLine[] = decisions.map((decision) => {
-    const keys = GATE_KEYS[decision.check];
+    const stageKey = STAGE_KEYS[decision.check];
+    if (stageKey !== undefined) {
+      return {
+        ok: decision.ok,
+        text: t(locale, stageKey, { name: childName, detail: decision.detail ?? '' })
+      };
+    }
+
+    const keys = GATE_KEYS[decision.check] ?? GATE_KEYS[gateName(decision.check)];
     if (keys === undefined) {
       return {
         ok: decision.ok,

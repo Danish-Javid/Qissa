@@ -58,7 +58,11 @@ describe('t()', () => {
   });
 
   it('leaves an unmatched placeholder visible rather than blanking it', () => {
-    expect(t('en', 'digest.title', {})).toBe('{name} — progress');
+    // Asserted on the behaviour, not the copy: "{name} moved up" is a visible,
+    // reportable bug, whereas " moved up" reads as a finished sentence and
+    // hides it. Pinning the wording here would just make copy edits fail.
+    expect(t('en', 'digest.title', {})).toContain('{name}');
+    expect(t('ur', 'digest.title', {})).toContain('{name}');
   });
 
   it('binds a locale via translator()', () => {
@@ -128,6 +132,58 @@ describe('explainStory', () => {
     expect(out.provenance).toContain('did not pass');
     expect(out.checks[0]!.ok).toBe(false);
     expect(out.checks[0]!.text).toContain('zebra');
+  });
+
+  it('resolves the stage-namespaced check names the engine really writes', () => {
+    // These are verbatim from a live `POST /api/stories` provenance row. The
+    // first version of this module keyed on bare gate names and silently
+    // degraded every one of them to "passed an additional check".
+    const out = explainStory('en', {
+      childName: 'Mina',
+      level: 1,
+      source: 'generated',
+      targetGrapheme: 's',
+      reviewGraphemes: [],
+      decisions: [
+        { check: 'generator.decodability', ok: true },
+        { check: 'generator.content-filter', ok: true },
+        { check: 'generator.page-count', ok: true, detail: 'wanted 4, got 4' },
+        { check: 'generator.target-density', ok: true, detail: '"s" x18 (min 6)' },
+        { check: 'generator.review-density', ok: true }
+      ]
+    });
+    for (const check of out.checks) {
+      expect(check.text, check.text).not.toContain('additional check');
+    }
+    expect(out.checks[0]!.text).toContain('sound out');
+  });
+
+  it('narrates the ladder stages that are not gates', () => {
+    const out = explainStory('en', {
+      childName: 'Mina',
+      level: 1,
+      source: 'cache',
+      targetGrapheme: 's',
+      reviewGraphemes: [],
+      decisions: [
+        { check: 'generator.available', ok: false, detail: 'ETIMEDOUT' },
+        { check: 'fallback.cache', ok: true, detail: 'Sam sat' }
+      ]
+    });
+    expect(out.checks[0]!.text).toContain('could not be reached');
+    expect(out.checks[1]!.text).toContain('Sam sat');
+  });
+
+  it('handles warm-cache namespacing the same way', () => {
+    const out = explainStory('en', {
+      childName: 'Mina',
+      level: 1,
+      source: 'generated',
+      targetGrapheme: 's',
+      reviewGraphemes: [],
+      decisions: [{ check: 'warm-cache.decodability', ok: true }]
+    });
+    expect(out.checks[0]!.text).toContain('sound out');
   });
 
   it('never drops a gate it has no wording for', () => {

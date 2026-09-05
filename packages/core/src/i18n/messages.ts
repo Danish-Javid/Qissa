@@ -26,8 +26,16 @@ const en = {
   'common.share': 'Share',
 
   // --- digest --------------------------------------------------------------
-  'digest.title': '{name} — progress',
-  'digest.subtitle': 'What happened, and why the engine decided it.',
+  'digest.title': '{name} — the story of their learning',
+  'digest.subtitle':
+    'Sounds and words are the first chapter — every session also wove in spoken language, the wider world and a mission for home.',
+  'digest.consentGiven': 'Voice consent: given {date}',
+  'digest.consentMissing': 'Voice consent: not given — no audio is stored',
+  'digest.phonics': 'Phonics knowledge',
+  'digest.noPhonics': 'No reading yet — the first story will teach the first sounds.',
+  'digest.levelLine': 'Level {level} · {count} decodable words unlocked',
+  'digest.fluencyTrend': 'Fluency trend (words/min)',
+  'digest.distressTitle': 'Worth a gentle conversation',
   'digest.level': 'Level {level}',
   'digest.mastered': 'Mastered',
   'digest.learning': 'Learning',
@@ -46,6 +54,15 @@ const en = {
   'digest.noReasoning': 'No decisions recorded yet.',
   'digest.technicalDetail': 'Technical detail',
   'digest.checksPassed': 'Passed {count} checks',
+
+  // --- First Words: code-switched coaching for the co-viewing adult --------
+  // The TARGET WORD is always English -- that is what the child is learning.
+  // Only the frame around it switches, which is exactly how a Pakistani adult
+  // teaches a toddler in practice ("dekho -- ball!").
+  'early.coachTitle': 'Say it together',
+  'early.coachLook': 'Look — {word}!',
+  'early.coachFind': 'Where is the {word}?',
+  'early.coachPraise': 'Well done! {word}!',
 
   // --- the "why this story" explainer --------------------------------------
   'explain.storyChosen':
@@ -70,6 +87,9 @@ const en = {
   'explain.gateReviewDensityFailed': 'Rejected: review sounds were under-used ({detail}).',
   'explain.gateUnknown': 'Passed an additional check ({check}).',
   'explain.gateUnknownFailed': 'Rejected by an additional check ({check}: {detail}).',
+  'explain.generatorUnavailable': 'The story model could not be reached, so the ladder took over.',
+  'explain.fallbackCache': 'Served a hand-written story that passes the same checks (“{detail}”).',
+  'explain.fallbackDeterministic': 'Built a guaranteed-safe story from the word bank.',
 
   // --- reasoning timeline events -------------------------------------------
   'event.storyAccepted': 'A story passed every safety check and was shown.',
@@ -94,8 +114,16 @@ const ur: Record<MessageKey, string> = {
   'common.print': 'پرنٹ کریں',
   'common.share': 'شیئر کریں',
 
-  'digest.title': '{name} — پیش رفت',
-  'digest.subtitle': 'کیا ہوا، اور انجن نے یہ فیصلہ کیوں کیا۔',
+  'digest.title': '{name} کے سیکھنے کی کہانی',
+  'digest.subtitle':
+    'آوازیں اور الفاظ تو صرف پہلا باب ہیں — ہر نشست میں بولنے کی زبان، دنیا کی سمجھ اور گھر کے لیے ایک کام بھی شامل تھا۔',
+  'digest.consentGiven': 'آواز کی اجازت: {date} کو دی گئی',
+  'digest.consentMissing': 'آواز کی اجازت: نہیں دی گئی — کوئی آڈیو محفوظ نہیں ہوتی',
+  'digest.phonics': 'آوازوں کی سمجھ',
+  'digest.noPhonics': 'ابھی پڑھنا شروع نہیں ہوا — پہلی کہانی پہلی آوازیں سکھائے گی۔',
+  'digest.levelLine': 'لیول {level} · {count} الفاظ پڑھنے کے قابل ہوئے',
+  'digest.fluencyTrend': 'روانی کا رجحان (الفاظ فی منٹ)',
+  'digest.distressTitle': 'ایک نرم گفتگو کی ضرورت',
   'digest.level': 'لیول {level}',
   'digest.mastered': 'مکمل سیکھ لیا',
   'digest.learning': 'سیکھ رہی ہے',
@@ -114,6 +142,11 @@ const ur: Record<MessageKey, string> = {
   'digest.noReasoning': 'ابھی کوئی فیصلہ درج نہیں۔',
   'digest.technicalDetail': 'تکنیکی تفصیل',
   'digest.checksPassed': '{count} جانچیں پاس کیں',
+
+  'early.coachTitle': 'ساتھ مل کر بولیں',
+  'early.coachLook': 'دیکھو — {word}!',
+  'early.coachFind': '{word} کہاں ہے؟ ڈھونڈو!',
+  'early.coachPraise': 'شاباش! {word}!',
 
   'explain.storyChosen':
     'یہ کہانی لیول {level} پر آواز “{grapheme}” سکھاتی ہے، کیونکہ {name} کے نصاب میں اگلی آواز یہی ہے۔',
@@ -137,6 +170,9 @@ const ur: Record<MessageKey, string> = {
   'explain.gateReviewDensityFailed': 'مسترد: دہرائی کی آوازیں کم استعمال ہوئیں ({detail})۔',
   'explain.gateUnknown': 'ایک اضافی جانچ بھی پاس کی ({check})۔',
   'explain.gateUnknownFailed': 'ایک اضافی جانچ نے مسترد کیا ({check}: {detail})۔',
+  'explain.generatorUnavailable': 'کہانی کا ماڈل دستیاب نہیں تھا، اس لیے متبادل نظام نے کام سنبھالا۔',
+  'explain.fallbackCache': 'ہاتھ سے لکھی وہ کہانی دی گئی جو انہی جانچوں سے گزرتی ہے (“{detail}”)۔',
+  'explain.fallbackDeterministic': 'لفظوں کے ذخیرے سے ایک محفوظ کہانی بنائی گئی۔',
 
   'event.storyAccepted': 'ایک کہانی ہر حفاظتی جانچ سے گزری اور دکھائی گئی۔',
   'event.storyRejected': 'بنائی گئی ایک کہانی {name} کے دیکھنے سے پہلے ہی مسترد کر دی گئی۔',

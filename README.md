@@ -197,6 +197,7 @@ npm run dev -w @qissa/web            # Vite dev server, proxies /api → :3000
 npm test -w @qissa/core              # 136 tests (10 files) — engines, learner, modes, data spine
 npm test -w @qissa/server            # 49 tests (7 files) — pipeline, orchestrator, red team, safety,
                                      #   route surface, auth hardening
+npm test -w @qissa/web               # 6 tests (1 file) — api client: 401 handling, CSRF
 npm run seed -w @qissa/server        # demo history (needs DATABASE_URL)
 npm run check                        # lint + test + build, the whole gate
 ```
