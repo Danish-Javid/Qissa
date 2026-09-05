@@ -423,7 +423,7 @@ export async function seed(prisma: PrismaClient): Promise<void> {
     }
   });
 
-  // eslint-disable-next-line no-console -- seed progress is operator-facing
+   
   console.log(
     `Seeded demo family: ${env.SEED_PARENT_EMAIL} · child "${child.name}" · ` +
       `${SESSION_COUNT} sessions · level ${model.currentLevel} · ` +
@@ -452,7 +452,7 @@ async function main(): Promise<void> {
 }
 
 main().catch((err) => {
-  // eslint-disable-next-line no-console -- CLI failure must be visible
+   
   console.error('Seed failed:', err);
   process.exitCode = 1;
 });

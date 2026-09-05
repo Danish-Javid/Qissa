@@ -16,6 +16,8 @@ import { Link, useNavigate } from 'react-router-dom';
 import { modeLabel } from '@qissa/core';
 import { api } from '../api/client.js';
 import type { ChildSummary, MeResponse } from '../api/types.js';
+import { LanguageToggle } from '../i18n/LanguageToggle.js';
+import { ParentPage } from './ParentPage.js';
 
 /** The primer scope — what a Qissa story teaches besides letters. Each
  *  line says HOW honestly (picture-walk talk / art / home mission), never
@@ -74,7 +76,7 @@ export function Dashboard() {
   }
 
   return (
-    <div className="mx-auto max-w-4xl space-y-6 p-6">
+    <ParentPage className="mx-auto max-w-4xl space-y-6 p-6">
       <header className="flex flex-wrap items-center justify-between gap-3 rounded-3xl bg-leaf px-6 py-5 text-white shadow">
         <div className="flex items-center gap-4">
           <img src="/landing/buddy.png" alt="" className="h-14 w-14 rounded-2xl bg-white/20 p-1" />
@@ -83,9 +85,15 @@ export function Dashboard() {
             <p className="text-sm text-white/85">Your child's living primer — {me?.email ?? '…'}</p>
           </div>
         </div>
-        <button type="button" className="rounded-xl bg-white/20 px-4 py-2 text-sm font-semibold hover:bg-white/30" onClick={() => void logout()}>
-          Sign out
-        </button>
+        <div className="flex items-center gap-3">
+          {/* The language switch lives in the dashboard header because that is
+              the first parent surface after sign-in — an Urdu-reading parent
+              should not have to reach the digest to find it. */}
+          <LanguageToggle tone="dark" />
+          <button type="button" className="rounded-xl bg-white/20 px-4 py-2 text-sm font-semibold hover:bg-white/30" onClick={() => void logout()}>
+            Sign out
+          </button>
+        </div>
       </header>
 
       <section className="rounded-2xl bg-white p-6 shadow">
@@ -184,6 +192,22 @@ export function Dashboard() {
                       </select>
                     </label>
 
+                    <label className="flex items-center justify-between gap-2 text-xs font-semibold text-ink/70">
+                      <span>
+                        Low-bandwidth mode
+                        <span className="block text-[11px] font-normal text-ink/50">
+                          Simple drawn pictures instead of generated art — much less mobile data
+                        </span>
+                      </span>
+                      <input
+                        type="checkbox"
+                        className="h-5 w-5 accent-leaf"
+                        checked={child.settings.lowBandwidth === true}
+                        disabled={busyId === child.id}
+                        onChange={(e) => void updateSettings(child.id, { lowBandwidth: e.target.checked })}
+                      />
+                    </label>
+
                     <label className="block text-xs font-semibold text-ink/70">
                       Daily session cap (minutes)
                       <input
@@ -234,11 +258,14 @@ export function Dashboard() {
       </section>
 
       <footer className="flex justify-between text-sm">
+        <Link to="/parent/demo" className="text-leaf underline">
+          Demo control
+        </Link>
         <Link to="/parent/archive" className="text-leaf underline">
           Story archive
         </Link>
         <span className="text-ink/40">Voice consent: {me?.consentGivenAt ? 'given' : 'not given'}</span>
       </footer>
-    </div>
+    </ParentPage>
   );
 }

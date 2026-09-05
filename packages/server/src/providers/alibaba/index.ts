@@ -37,6 +37,10 @@ import type {
   SynthesisResult
 } from '../interfaces.js';
 
+/** Ceiling for ONE background story generation. The child-facing path passes
+ *  its own, much shorter budget (see StoryGenerationRequest.budgetMs). */
+const QWEN_DEFAULT_TIMEOUT_MS = 45_000;
+
 /** Rough vendor prices, micro-USD per call (pitch-card estimates). */
 const COSTS = {
   storyGeneration: 20_000, // ~2k tokens through qwen-max
@@ -94,7 +98,12 @@ export class QwenStoryGenerator implements IStoryGenerator {
           { role: 'user', content: buildStoryPrompt(request) }
         ]
       }),
-      timeoutMs: 45_000
+      // Honour the engine's per-call ceiling. The child-facing serve passes a
+      // SHORT budget (fail fast to the vetted ladder, never a spinner); the
+      // background prefetch passes none and keeps the generous default below.
+      // Ignoring it here meant a tap in alibaba mode could sit for 45s on the
+      // exact path the 9s grace exists to protect.
+      timeoutMs: request.budgetMs ?? QWEN_DEFAULT_TIMEOUT_MS
     });
 
     const body = (await response.json()) as {

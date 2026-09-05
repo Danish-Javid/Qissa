@@ -8,40 +8,41 @@
  *  /parent/*    — login, setup, dashboard, digest, archive, pipeline (the
  *                 judging / honesty view).
  */
-import { useEffect } from 'react';
 import { Navigate, Route, Routes } from 'react-router-dom';
-import { api } from './api/client.js';
 import { ChildHome } from './child/ChildHome.js';
 import { Landing } from './Landing.js';
 import { Archive } from './parent/Archive.js';
+import { Certificate } from './parent/Certificate.js';
 import { Dashboard } from './parent/Dashboard.js';
+import { Demo } from './parent/Demo.js';
 import { Digest } from './parent/Digest.js';
 import { Login } from './parent/Login.js';
 import { Pipeline } from './parent/Pipeline.js';
 import { Setup } from './parent/Setup.js';
+import { LocaleProvider } from './i18n/LocaleProvider.js';
 
 export default function App() {
-  // Restore the CSRF double-submit token on every app load. The HttpOnly
-  // session cookie outlives sessionStorage, so a reload in a fresh tab is
-  // authenticated for reads but would 403 on every write — which drops the
-  // child straight to the "hand the device to a grown-up" screen. GET /auth/me
-  // re-seeds the token from the live session (the api client auto-adopts it).
-  // Best effort: a logged-out visitor just gets a 401 and carries on.
-  useEffect(() => {
-    api.get('/auth/me').catch(() => undefined);
-  }, []);
-
+  // LocaleProvider issues the app-load GET /auth/me. That single call does two
+  // jobs: it adopts the parent's stored language, and — because the api client
+  // re-seeds the CSRF token from any response carrying one — it restores the
+  // double-submit token that sessionStorage loses on a fresh tab. Without it a
+  // reload is authenticated for reads but 403s on every write, which drops the
+  // child straight to the "hand the device to a grown-up" screen.
   return (
-    <Routes>
-      <Route path="/" element={<Landing />} />
-      <Route path="/child/:childId" element={<ChildHome />} />
-      <Route path="/parent" element={<Dashboard />} />
-      <Route path="/parent/login" element={<Login />} />
-      <Route path="/parent/setup" element={<Setup />} />
-      <Route path="/parent/digest/:childId" element={<Digest />} />
-      <Route path="/parent/archive" element={<Archive />} />
-      <Route path="/parent/pipeline" element={<Pipeline />} />
-      <Route path="*" element={<Navigate to="/" replace />} />
-    </Routes>
+    <LocaleProvider>
+      <Routes>
+        <Route path="/" element={<Landing />} />
+        <Route path="/child/:childId" element={<ChildHome />} />
+        <Route path="/parent" element={<Dashboard />} />
+        <Route path="/parent/login" element={<Login />} />
+        <Route path="/parent/setup" element={<Setup />} />
+        <Route path="/parent/digest/:childId" element={<Digest />} />
+        <Route path="/parent/archive" element={<Archive />} />
+        <Route path="/parent/pipeline" element={<Pipeline />} />
+        <Route path="/parent/demo" element={<Demo />} />
+        <Route path="/parent/certificate/:childId" element={<Certificate />} />
+        <Route path="*" element={<Navigate to="/" replace />} />
+      </Routes>
+    </LocaleProvider>
   );
 }

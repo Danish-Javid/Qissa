@@ -353,7 +353,9 @@ export function StoryTimePlayer({ childId, mockMode, pacing, onDone }: Props) {
 
         <div className="flex w-full flex-col items-center gap-3 pb-2">
           <Buddy mood={mood} size={150} />
-          <div className="bubble max-w-lg text-xl font-semibold">{caption}</div>
+          <div className="bubble max-w-lg text-xl font-semibold" role="status" aria-live="polite">
+            {caption}
+          </div>
         </div>
       </div>
     </div>

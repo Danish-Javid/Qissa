@@ -8,7 +8,7 @@
  */
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
-import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom';
+import { BrowserRouter, Route, Routes } from 'react-router-dom';
 import { registerSW } from 'virtual:pwa-register';
 // Andika: a free typeface designed for teaching children to read
 // (single-storey a/g, distinct b/d/p/q). Self-hosted via @fontsource so

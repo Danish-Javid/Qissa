@@ -168,3 +168,42 @@ describe('mode copy', () => {
     }
   });
 });
+
+/**
+ * Low-bandwidth mode (FR-K). The setting rides the free-form settings column,
+ * so the parser is the only thing standing between a corrupt row and a crash
+ * on the child's screen.
+ */
+describe('lowBandwidth setting', () => {
+  it('reads a real boolean', () => {
+    expect(parseChildSettings({ lowBandwidth: true }).lowBandwidth).toBe(true);
+    expect(parseChildSettings({ lowBandwidth: false }).lowBandwidth).toBe(false);
+  });
+
+  it('is absent rather than false when unset, so "off" and "never set" stay distinct', () => {
+    expect(parseChildSettings({}).lowBandwidth).toBeUndefined();
+    expect(parseChildSettings(null).lowBandwidth).toBeUndefined();
+  });
+
+  it('ignores non-boolean values instead of coercing them', () => {
+    // A truthy string must NOT silently enable the mode: settings arrive from a
+    // JSON column that older or buggy writers may have touched.
+    expect(parseChildSettings({ lowBandwidth: 'yes' }).lowBandwidth).toBeUndefined();
+    expect(parseChildSettings({ lowBandwidth: 1 }).lowBandwidth).toBeUndefined();
+  });
+
+  it('survives alongside the other settings', () => {
+    const parsed = parseChildSettings({
+      learningTrack: 'learn-to-read',
+      storyPacing: 'slow',
+      lowBandwidth: true,
+      sessionCapMinutes: 10
+    });
+    expect(parsed).toEqual({
+      learningTrack: 'learn-to-read',
+      storyPacing: 'slow',
+      lowBandwidth: true,
+      sessionCapMinutes: 10
+    });
+  });
+});

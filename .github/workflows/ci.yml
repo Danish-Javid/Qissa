@@ -1,0 +1,138 @@
+# Qissa CI — the same gate the README promises (`npm run check`), enforced
+# on every push and pull request so a red branch can never reach the demo.
+#
+# Job layout is deliberate:
+#   verify  — lint + unit tests (core, server, web) + build (~3 min)
+#   docker  — proves `docker compose up --build` still works, which is the
+#             single command the judges will run; a broken Dockerfile is a
+#             demo-day failure that unit tests cannot catch
+#   audit   — advisories reported always; fails only on CRITICAL, because the
+#             one outstanding high is documented and accepted (README
+#             §"Known accepted advisory": the Prisma CLI deepmerge-ts case)
+name: CI
+
+on:
+  push:
+    branches: ['**']
+  pull_request:
+  workflow_dispatch:
+
+# A new push to the same branch cancels the previous, still-running check.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    name: Lint, test, build
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      # npm ci honours the committed lockfile — the same supply-chain
+      # pinning the Docker build relies on.
+      - name: Install dependencies
+        run: npm ci
+
+      # The server imports the generated Prisma client as a value (not just
+      # types), so it must exist before typecheck, tests, or build.
+      - name: Generate Prisma client
+        run: npm run db:generate
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Test
+        run: npm test
+
+      - name: Build
+        run: npm run build
+
+  docker:
+    name: Docker image builds
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: docker/setup-buildx-action@v3
+
+      # Build only — the image is not pushed anywhere. This catches Dockerfile
+      # drift (a missed COPY, a stage that no longer compiles) before demo day.
+      - name: Build image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: false
+          load: true
+          tags: qissa:ci
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  smoke:
+    name: Compose smoke test
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+
+      # The compose file reads .env; the committed example is the zero-key
+      # mock configuration the judges are told to use verbatim.
+      - name: Seed environment
+        run: cp .env.example .env
+
+      - name: Start the stack
+        run: docker compose up --build --detach --wait --wait-timeout 300
+
+      # /api/health is the same endpoint the container HEALTHCHECK probes.
+      - name: Probe health endpoint
+        run: |
+          set -euo pipefail
+          curl --fail --silent --show-error --retry 12 --retry-delay 5 \
+            --retry-all-errors http://localhost:3000/api/health | tee /dev/stderr | grep -q '"status":"ok"'
+
+      # The PWA must be served from the same origin as the API.
+      - name: Probe the served PWA shell
+        run: curl --fail --silent --show-error http://localhost:3000/ > /dev/null
+
+      - name: Dump logs on failure
+        if: failure()
+        run: docker compose logs --no-color
+
+      - name: Tear down
+        if: always()
+        run: docker compose down --volumes
+
+  audit:
+    name: Dependency audit
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+
+      # Always print the high-and-above report so a new advisory is visible in
+      # the log even when it does not fail the build.
+      - name: Report advisories (informational)
+        run: npm audit --audit-level=high || true
+
+      # Fail only on CRITICAL. The one outstanding high advisory is the
+      # documented, accepted Prisma CLI case (build-time only, never in the
+      # request path) -- see README "Known accepted advisory". Using
+      # continue-on-error instead would still render a red X on every PR,
+      # training everyone to ignore the audit entirely.
+      - name: Fail on critical advisories
+        run: npm audit --audit-level=critical

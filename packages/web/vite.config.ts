@@ -11,6 +11,7 @@
  *    The Vite env allowlist stays EMPTY by design: nothing secret can ever
  *    reach this bundle (plan §Security 1).
  */
+/// <reference types="vitest/config" />
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 import tailwindcss from '@tailwindcss/vite';
@@ -60,5 +61,13 @@ export default defineConfig({
     // Chunk warnings are noise for an app this size; keep the build loud
     // only for real errors.
     chunkSizeWarningLimit: 900
+  },
+  test: {
+    // jsdom, because the units worth testing here are the ones that talk to
+    // browser globals -- the api client's 401 handling reads window.location
+    // and sessionStorage, and that is exactly where the redirect loop lived.
+    environment: 'jsdom',
+    include: ['src/**/*.test.{ts,tsx}'],
+    restoreMocks: true
   }
 });

@@ -19,6 +19,7 @@
  * inject. Progress posts ride the CSRF-guarded api client like everything.
  */
 import { useEffect, useRef, useState } from 'react';
+import { ParentCoach, type CoachMode } from '../i18n/ParentCoach.js';
 import { api } from '../api/client.js';
 import { speak, stopSpeaking } from '../lib/speech.js';
 import { sfx } from '../lib/sfx.js';
@@ -335,6 +336,11 @@ export function EarlyPlayer({ childId, mockMode, onDone }: Props) {
           ? 'listen'
           : 'happy';
 
+  // Which coaching line the grown-up should say along with Buddy. Mirrors the
+  // card's own say -> ask -> praise arc: sparkle marks the celebration, and
+  // tapReady marks the moment the child is being asked to find the picture.
+  const coachMode: CoachMode = sparkle ? 'praise' : tapReady ? 'find' : 'look';
+
   if (phase === 'grownup') {
     return (
       <div className="relative h-full overflow-hidden">
@@ -402,7 +408,10 @@ export function EarlyPlayer({ childId, mockMode, onDone }: Props) {
               ))}
             </div>
             <Buddy mood={mood} size={170} />
-            <div className="bubble max-w-lg text-xl font-semibold">{caption}</div>
+            <div className="bubble max-w-lg text-xl font-semibold" role="status" aria-live="polite">
+              {caption}
+            </div>
+            <ParentCoach word={round.targetWord} mode={quizResolved ? 'praise' : 'find'} />
           </div>
         </div>
       );
@@ -471,7 +480,12 @@ export function EarlyPlayer({ childId, mockMode, onDone }: Props) {
 
         {/* Grown-up caption — co-viewing support, never load-bearing for the
             child (they do not need to read anything to play). */}
-        <div className="bubble max-w-lg text-xl font-semibold">{caption}</div>
+        <div className="bubble max-w-lg text-xl font-semibold" role="status" aria-live="polite">
+              {caption}
+            </div>
+        {card !== undefined && phase === 'card' && (
+          <ParentCoach word={card.word} mode={coachMode} />
+        )}
       </div>
     </div>
   );

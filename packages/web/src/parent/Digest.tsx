@@ -10,11 +10,16 @@
  */
 import { useEffect, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
+import { explainAuditEvent, explainStory, isSetbackEvent } from '@qissa/core';
 import { api } from '../api/client.js';
 import type { DigestResponse } from '../api/types.js';
+import { LanguageToggle } from '../i18n/LanguageToggle.js';
+import { useLocale } from '../i18n/LocaleProvider.js';
+import { ParentPage } from './ParentPage.js';
 
 export function Digest() {
   const { childId } = useParams();
+  const { locale, tr, num } = useLocale();
   const [digest, setDigest] = useState<DigestResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -37,45 +42,53 @@ export function Digest() {
     );
   }
   if (digest === null) {
-    return <p className="p-6 text-ink/60">Loading the digest…</p>;
+    return <p className="p-6 text-ink/60">{tr('common.loading')}</p>;
   }
 
   const learner = digest.learner;
 
   return (
-    <div className="mx-auto max-w-3xl space-y-6 p-6">
+    <ParentPage className="mx-auto max-w-3xl space-y-6 p-6">
       <header className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold">{digest.child.name} — the story of their learning</h1>
-          <p className="mt-1 text-sm text-ink/60">
-            Sounds and words are the first chapter — every session also wove in spoken language,
-            the wider world and a mission for home.
-          </p>
+          <h1 className="text-2xl font-bold">{tr('digest.title', { name: digest.child.name })}</h1>
+          <p className="mt-1 text-sm text-ink/60">{tr('digest.subtitle')}</p>
           <p className="text-sm text-ink/60">
-            Voice consent: {digest.child.consentGivenAt ? `given ${formatDate(digest.child.consentGivenAt)}` : 'not given — no audio is stored'}
+            {digest.child.consentGivenAt
+              ? tr('digest.consentGiven', { date: formatDate(digest.child.consentGivenAt) })
+              : tr('digest.consentMissing')}
           </p>
         </div>
-        <Link to="/parent" className="btn-parent">
-          Back
-        </Link>
+        <div className="flex flex-wrap items-center gap-3">
+          <LanguageToggle />
+          <Link to={`/parent/certificate/${digest.child.id}`} className="text-sm text-leaf underline">
+            {tr('cert.open')}
+          </Link>
+          <Link to="/parent" className="btn-parent">
+            {tr('common.backToDashboard')}
+          </Link>
+        </div>
       </header>
 
       {/* Learner model — what the engine currently believes the child knows. */}
       <section className="rounded-2xl bg-white p-6 shadow">
-        <h2 className="mb-3 text-lg font-bold">Phonics knowledge</h2>
+        <h2 className="mb-3 text-lg font-bold">{tr('digest.phonics')}</h2>
         {learner === null ? (
-          <p className="text-sm text-ink/60">No reading yet — the first story will teach the first sounds.</p>
+          <p className="text-sm text-ink/60">{tr('digest.noPhonics')}</p>
         ) : (
           <>
             <p className="mb-3 text-sm text-ink/60">
-              Level {learner.currentLevel} · {learner.vocabularyCount} decodable words unlocked
+              {tr('digest.levelLine', {
+                level: num(learner.currentLevel),
+                count: num(learner.vocabularyCount)
+              })}
             </p>
-            <GraphemeRow label="Mastered" graphemes={learner.mastered} tone="bg-leaf/15 text-leaf" />
-            <GraphemeRow label="Learning" graphemes={learner.learning} tone="bg-gold/20 text-gold" />
-            <GraphemeRow label="Reteach" graphemes={learner.reteach} tone="bg-clay/10 text-clay" />
+            <GraphemeRow label={tr('digest.mastered')} graphemes={learner.mastered} tone="bg-leaf/15 text-leaf" />
+            <GraphemeRow label={tr('digest.learning')} graphemes={learner.learning} tone="bg-gold/20 text-gold" />
+            <GraphemeRow label={tr('digest.reteach')} graphemes={learner.reteach} tone="bg-clay/10 text-clay" />
             {learner.fluency.length > 0 && (
               <div className="mt-4">
-                <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-ink/50">Fluency trend (words/min)</p>
+                <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-ink/50">{tr('digest.fluencyTrend')}</p>
                 <div className="flex flex-wrap gap-2">
                   {learner.fluency.map((point) => (
                     <span key={point.at} className="rounded-lg bg-paper px-2 py-1 text-sm">
@@ -91,9 +104,9 @@ export function Digest() {
 
       {/* Sessions — one row per reading, cap flags visible to the parent. */}
       <section className="rounded-2xl bg-white p-6 shadow">
-        <h2 className="mb-3 text-lg font-bold">Sessions</h2>
+        <h2 className="mb-3 text-lg font-bold">{tr('digest.sessions')}</h2>
         {digest.sessions.length === 0 ? (
-          <p className="text-sm text-ink/60">No sessions yet.</p>
+          <p className="text-sm text-ink/60">{tr('digest.noSessions')}</p>
         ) : (
           <table className="w-full text-left text-sm">
             <thead>
@@ -144,18 +157,86 @@ export function Digest() {
         </section>
       )}
 
-      {/* Reasoning timeline — append-only audit rows, newest first. */}
+      {/* Why this story — the provenance of each story, in parent language.
+          The engine already recorded every gate verdict; this renders it as
+          sentences instead of check names. Wording comes from core so an
+          offline browser produces exactly the same text (FR-I.9, FR-J). */}
       <section className="rounded-2xl bg-white p-6 shadow">
-        <h2 className="mb-3 text-lg font-bold">Why the engine did what it did</h2>
+        <h2 className="mb-3 text-lg font-bold">{tr('digest.whyThisStory', { name: digest.child.name })}</h2>
+        {digest.stories.length === 0 ? (
+          <p className="text-sm text-ink/60">{tr('digest.noStories')}</p>
+        ) : (
+          <ul className="space-y-4">
+            {digest.stories.map((story) => {
+              const explanation = explainStory(locale, {
+                childName: digest.child.name,
+                level: story.level,
+                source: story.source,
+                targetGrapheme: story.targetGrapheme,
+                reviewGraphemes: story.reviewGraphemes,
+                decisions: story.decisions
+              });
+              const passed = explanation.checks.filter((c) => c.ok).length;
+              return (
+                <li key={story.id} className="rounded-xl bg-paper p-4">
+                  <div className="flex flex-wrap items-baseline justify-between gap-2">
+                    <h3 className="font-story text-base font-bold">“{story.title}”</h3>
+                    <span className="text-xs text-ink/40">{formatDate(story.createdAt)}</span>
+                  </div>
+                  <p className="mt-2 text-sm">{explanation.headline}</p>
+                  {explanation.review !== null && (
+                    <p className="mt-1 text-sm text-ink/70">{explanation.review}</p>
+                  )}
+                  <p className="mt-1 text-sm text-ink/70">{explanation.provenance}</p>
+                  <ul className="mt-3 space-y-1 text-sm">
+                    {explanation.checks.map((check, index) => (
+                      <li key={index} className="flex gap-2">
+                        <span aria-hidden="true" className={check.ok ? 'text-leaf' : 'text-clay'}>
+                          {check.ok ? '✓' : '✗'}
+                        </span>
+                        <span className={check.ok ? 'text-ink/75' : 'text-clay'}>{check.text}</span>
+                      </li>
+                    ))}
+                  </ul>
+                  <p className="mt-2 text-xs text-ink/40">
+                    {tr('digest.checksPassed', { count: num(passed) })}
+                    {story.generator !== null && <> · {story.generator}</>}
+                  </p>
+                </li>
+              );
+            })}
+          </ul>
+        )}
+      </section>
+
+      {/* Reasoning timeline — append-only audit rows, newest first, rendered
+          in parent language. The raw event name stays available underneath as
+          a <details>: the honesty claim depends on the technical truth being
+          reachable, not merely summarised away. */}
+      <section className="rounded-2xl bg-white p-6 shadow">
+        <h2 className="mb-3 text-lg font-bold">{tr('digest.reasoningTitle')}</h2>
         {digest.reasoning.length === 0 ? (
-          <p className="text-sm text-ink/60">No decisions recorded yet.</p>
+          <p className="text-sm text-ink/60">{tr('digest.noReasoning')}</p>
         ) : (
           <ol className="space-y-2 text-sm">
             {digest.reasoning.slice(0, 30).map((row, index) => (
-              <li key={index} className="flex gap-3 rounded-lg bg-paper p-3">
+              <li
+                key={index}
+                className={`flex gap-3 rounded-lg p-3 ${
+                  isSetbackEvent(row.event) ? 'bg-clay/5' : 'bg-paper'
+                }`}
+              >
                 <span className="shrink-0 text-xs text-ink/40">{formatDate(row.createdAt)}</span>
                 <span>
-                  <strong>{row.event}</strong> {summarize(row.detail)}
+                  {explainAuditEvent(locale, row.event, digest.child.name)}
+                  <details className="mt-1">
+                    <summary className="cursor-pointer text-xs text-ink/40">
+                      {tr('digest.technicalDetail')}
+                    </summary>
+                    <code className="text-xs text-ink/50">
+                      {row.event} {summarize(row.detail)}
+                    </code>
+                  </details>
                 </span>
               </li>
             ))}
@@ -165,9 +246,9 @@ export function Digest() {
 
       {/* Miscues — the teaching signal, with accent allow-list notes. */}
       <section className="rounded-2xl bg-white p-6 shadow">
-        <h2 className="mb-3 text-lg font-bold">Recent miscues</h2>
+        <h2 className="mb-3 text-lg font-bold">{tr('digest.miscues')}</h2>
         {digest.miscues.length === 0 ? (
-          <p className="text-sm text-ink/60">No miscues recorded — or none since the last session.</p>
+          <p className="text-sm text-ink/60">{tr('digest.noMiscues')}</p>
         ) : (
           <ul className="space-y-2 text-sm">
             {digest.miscues.slice(0, 20).map((miscue, index) => (
@@ -176,7 +257,7 @@ export function Digest() {
                 {miscue.spoken !== null && <> — heard “{miscue.spoken}”</>} · {miscue.miscueType} · sound “{miscue.grapheme}”
                 {miscue.accentApplied && (
                   <span className="ml-2 rounded-full bg-leaf/15 px-2 py-0.5 text-xs text-leaf">
-                    accent variant{miscue.accentNote !== null ? `: ${miscue.accentNote}` : ''}
+                    {tr('digest.accentVariant')}{miscue.accentNote !== null ? `: ${miscue.accentNote}` : ''}
                   </span>
                 )}
               </li>
@@ -187,11 +268,9 @@ export function Digest() {
 
       {/* Audio clips — only exist when consent was given (NFR-3). */}
       <section className="rounded-2xl bg-white p-6 shadow">
-        <h2 className="mb-3 text-lg font-bold">Hear the progress</h2>
+        <h2 className="mb-3 text-lg font-bold">{tr('digest.audio')}</h2>
         {digest.audioClips.length === 0 ? (
-          <p className="text-sm text-ink/60">
-            No clips stored. Clips exist only when voice consent is on, and are deleted after 30 days.
-          </p>
+          <p className="text-sm text-ink/60">{tr('digest.noAudio')}</p>
         ) : (
           <ul className="space-y-3">
             {digest.audioClips.map((clip) => (
@@ -204,7 +283,7 @@ export function Digest() {
           </ul>
         )}
       </section>
-    </div>
+    </ParentPage>
   );
 }
 

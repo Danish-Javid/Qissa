@@ -30,7 +30,7 @@ export async function audit(prisma: PrismaClient, entry: AuditEntry): Promise<vo
       }
     });
   } catch (err) {
-    // eslint-disable-next-line no-console -- audit failures are operational emergencies
+     
     console.error('[audit] failed to write entry', entry.event, err);
   }
 }

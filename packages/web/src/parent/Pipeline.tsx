@@ -9,7 +9,9 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { api } from '../api/client.js';
+import { ConnectionBadge } from '../lib/ConnectionBadge.js';
 import type { MetricsResponse } from '../api/types.js';
+import { ParentPage } from './ParentPage.js';
 
 export function Pipeline() {
   const [metrics, setMetrics] = useState<MetricsResponse | null>(null);
@@ -21,7 +23,7 @@ export function Pipeline() {
   const percent = (n: number | null): string => (n === null ? '—' : `${Math.round(n * 100)}%`);
 
   return (
-    <div className="mx-auto max-w-4xl space-y-6 p-6">
+    <ParentPage className="mx-auto max-w-4xl space-y-6 p-6">
       <header className="rounded-3xl bg-ink px-6 py-5 text-white shadow">
         <h1 className="font-story text-2xl font-bold">Under the hood — pipeline honesty</h1>
         <p className="mt-1 text-sm text-white/75">
@@ -32,6 +34,12 @@ export function Pipeline() {
           ← Back to dashboard
         </Link>
       </header>
+
+      {/* Resilience, demonstrable rather than asserted. */}
+      <section className="rounded-2xl bg-white p-6 shadow">
+        <h2 className="mb-3 text-lg font-bold">Connection</h2>
+        <ConnectionBadge />
+      </section>
 
       {metrics === null ? (
         <p className="text-sm text-ink/60">Loading audit metrics…</p>
@@ -48,10 +56,12 @@ export function Pipeline() {
             <Stat label="Vendor spend" value={`$${(metrics.sessions.costMicroUsd / 1e6).toFixed(4)}`} />
             <Stat label="Distress escalations" value={String(metrics.safety.distressEscalations)} />
             <Stat label="Accent catches" value={String(metrics.safety.accentVariantCatches)} />
+            <Stat label="Daily budget / child" value={String(metrics.budget.perChildPerDay)} />
+            <Stat label="Generations withheld" value={String(metrics.budget.generationsWithheld)} />
           </div>
         </section>
       )}
-    </div>
+    </ParentPage>
   );
 }
 

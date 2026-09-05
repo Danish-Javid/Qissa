@@ -28,6 +28,10 @@ model Parent {
   passwordHash String
   // Set once, at consent time (NFR-3). Shown back in the digest screen.
   consentGivenAt DateTime?
+  // Parent-layer language: 'en' | 'ur' (FR-J). Stored on the parent, not the
+  // child, because it is the ADULT who reads the dashboard and the digest --
+  // the child track stays English either way.
+  locale       String   @default("en")
   createdAt    DateTime @default(now())
 
   children     Child[]
@@ -66,6 +70,10 @@ model Child {
   // shape is @qissa/core ChildSettings; readers ignore unknown fields so the
   // column is forward-compatible without another migration.
   settings  Json?
+  // Marks a child created by the demo seeder (FR-K). Reset deletes ONLY rows
+  // carrying this flag, so a stage reset can never touch a real family's data
+  // even if the demo account is also a real one.
+  isDemo    Boolean  @default(false)
   createdAt DateTime @default(now())
 
   learnerModel   LearnerModel?

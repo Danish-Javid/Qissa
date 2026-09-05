@@ -57,6 +57,17 @@ export interface ChildSettings {
   storyTimeEnabled?: boolean;
   /** Parent-set daily session cap in minutes for this child. Absent = server default. */
   sessionCapMinutes?: number;
+  /**
+   * Low-bandwidth mode. Absent = false.
+   *
+   * Skips vendor image generation and serves the deterministic house-style SVG
+   * placeholder instead. The point is not to save money (though it does): on a
+   * metered Pakistani mobile connection a generated PNG per page is the single
+   * heaviest thing this app does, and a parent should be able to say "words
+   * only, please" without giving up the story. Every pedagogy gate is
+   * untouched -- only the picture changes.
+   */
+  lowBandwidth?: boolean;
 }
 
 /**
@@ -83,6 +94,9 @@ export function parseChildSettings(raw: unknown): ChildSettings {
   }
   if (typeof obj.sessionCapMinutes === 'number' && Number.isFinite(obj.sessionCapMinutes)) {
     out.sessionCapMinutes = obj.sessionCapMinutes;
+  }
+  if (typeof obj.lowBandwidth === 'boolean') {
+    out.lowBandwidth = obj.lowBandwidth;
   }
   return out;
 }

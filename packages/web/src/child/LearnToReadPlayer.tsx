@@ -588,7 +588,9 @@ export function LearnToReadPlayer({ childId, mockMode, onDone }: Props) {
       ) : (
         <Buddy mood={mood} size={150} />
       )}
-      <div className="bubble max-w-lg text-xl font-semibold sm:text-2xl">{caption}</div>
+      <div className="bubble max-w-lg text-xl font-semibold sm:text-2xl" role="status" aria-live="polite">
+        {caption}
+      </div>
 
       {/* One clear primary action per beat; a Next escape hatch is always
           present so nobody is ever stuck waiting on the mic. */}
