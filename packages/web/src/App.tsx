@@ -12,6 +12,7 @@ import { Navigate, Route, Routes } from 'react-router-dom';
 import { ChildHome } from './child/ChildHome.js';
 import { Landing } from './Landing.js';
 import { Archive } from './parent/Archive.js';
+import { Certificate } from './parent/Certificate.js';
 import { Dashboard } from './parent/Dashboard.js';
 import { Demo } from './parent/Demo.js';
 import { Digest } from './parent/Digest.js';
@@ -39,6 +40,7 @@ export default function App() {
         <Route path="/parent/archive" element={<Archive />} />
         <Route path="/parent/pipeline" element={<Pipeline />} />
         <Route path="/parent/demo" element={<Demo />} />
+        <Route path="/parent/certificate/:childId" element={<Certificate />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </LocaleProvider>

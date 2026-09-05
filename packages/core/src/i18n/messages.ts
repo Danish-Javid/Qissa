@@ -55,6 +55,21 @@ const en = {
   'digest.technicalDetail': 'Technical detail',
   'digest.checksPassed': 'Passed {count} checks',
 
+  // --- certificate + sharing ------------------------------------------------
+  'cert.title': 'Certificate of reading',
+  'cert.awardedTo': 'Awarded to',
+  'cert.achievement': 'for reaching level {level} and learning {count} sounds',
+  'cert.soundsLearned': 'Sounds {name} can read',
+  'cert.wordsRead': '{count} words read aloud',
+  'cert.issued': 'Issued {date}',
+  'cert.signature': 'Qissa — a living primer',
+  'cert.open': 'Progress certificate',
+  'cert.openHint': 'A printable page to put on the fridge.',
+  'cert.notYet': 'Once {name} has read a first story, a certificate appears here.',
+  'share.whatsapp': 'Share on WhatsApp',
+  'share.message':
+    '{name} is learning to read with Qissa — now at level {level}, with {count} sounds mastered and {words} words read aloud. 📖',
+
   // --- First Words: code-switched coaching for the co-viewing adult --------
   // The TARGET WORD is always English -- that is what the child is learning.
   // Only the frame around it switches, which is exactly how a Pakistani adult
@@ -142,6 +157,20 @@ const ur: Record<MessageKey, string> = {
   'digest.noReasoning': 'ابھی کوئی فیصلہ درج نہیں۔',
   'digest.technicalDetail': 'تکنیکی تفصیل',
   'digest.checksPassed': '{count} جانچیں پاس کیں',
+
+  'cert.title': 'پڑھنے کی سند',
+  'cert.awardedTo': 'بنام',
+  'cert.achievement': 'لیول {level} تک پہنچنے اور {count} آوازیں سیکھنے پر',
+  'cert.soundsLearned': 'وہ آوازیں جو {name} پڑھ سکتی ہے',
+  'cert.wordsRead': '{count} الفاظ بلند آواز میں پڑھے',
+  'cert.issued': 'اجرا: {date}',
+  'cert.signature': 'قصہ — ایک زندہ قاعدہ',
+  'cert.open': 'پیش رفت کی سند',
+  'cert.openHint': 'ایک قابلِ پرنٹ صفحہ، فریج پر لگانے کے لیے۔',
+  'cert.notYet': '{name} کی پہلی کہانی پڑھنے کے بعد یہاں سند آ جائے گی۔',
+  'share.whatsapp': 'واٹس ایپ پر شیئر کریں',
+  'share.message':
+    '{name} قصہ کے ساتھ پڑھنا سیکھ رہی ہے — اب لیول {level} پر، {count} آوازیں سیکھ لیں اور {words} الفاظ بلند آواز میں پڑھے۔ 📖',
 
   'early.coachTitle': 'ساتھ مل کر بولیں',
   'early.coachLook': 'دیکھو — {word}!',

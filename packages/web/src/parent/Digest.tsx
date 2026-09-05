@@ -58,8 +58,11 @@ export function Digest() {
               : tr('digest.consentMissing')}
           </p>
         </div>
-        <div className="flex items-center gap-3">
+        <div className="flex flex-wrap items-center gap-3">
           <LanguageToggle />
+          <Link to={`/parent/certificate/${digest.child.id}`} className="text-sm text-leaf underline">
+            {tr('cert.open')}
+          </Link>
           <Link to="/parent" className="btn-parent">
             {tr('common.backToDashboard')}
           </Link>
