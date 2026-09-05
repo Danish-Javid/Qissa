@@ -77,9 +77,13 @@ export function Login() {
         {/* Form side. */}
         <form onSubmit={(e) => void submit(e)} className="flex flex-col justify-center gap-4 p-8">
           <div>
-            <h1 className="text-2xl font-bold">Parent sign-in</h1>
+            <h1 className="text-2xl font-bold">
+              {mode === 'login' ? 'Parent sign-in' : 'Create a parent account'}
+            </h1>
             <p className="mt-1 text-sm text-ink/60">
-              One account for the grown-ups. Children never need a login — they just tap their story.
+              {mode === 'login'
+                ? 'One account for the grown-ups. Children never need a login — they just tap their story.'
+                : 'Qissa accounts belong to the grown-up. Your child never signs in — they just tap their story.'}
             </p>
           </div>
 
