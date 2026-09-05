@@ -30,6 +30,9 @@ export * from './pedagogy/correction-ladder.js';
 export * from './pedagogy/peer.js';
 export * from './pedagogy/progression.js';
 
+// Bilingual parent layer + the deterministic "why" explainer (FR-J, FR-I.9)
+export * from './i18n/index.js';
+
 // Learner model — the moat (FR-F)
 export * from './learner/spaced-repetition.js';
 export * from './learner/learner-model.js';
