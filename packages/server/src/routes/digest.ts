@@ -10,8 +10,11 @@
  *   reasoning        the audit trail of pipeline decisions (FR-I.9)
  *   miscues          recent word-level evidence, incl. accent notes
  *   audioClips       references to retained clips (NFR-3)
+ *   stories          recent stories with the gate decisions that produced
+ *                    them, so the screen can answer "why THIS story?" in the
+ *                    parent's own language (FR-I.9, FR-J)
  */
-import type { GraphemeStat, LearnerModel } from '@qissa/core';
+import type { GraphemeStat, LearnerModel, PipelineDecisionLike } from '@qissa/core';
 import { z } from 'zod';
 import type { FastifyInstance } from 'fastify';
 import { ctx } from '../context.js';
@@ -30,7 +33,7 @@ export async function digestRoutes(app: FastifyInstance): Promise<void> {
     const child = await ownedChild(prisma, params.id, request.auth.parent.id);
     if (child === null) return denyNotFound(reply);
 
-    const [learner, sessions, alerts, auditRows, miscues, clips] = await Promise.all([
+    const [learner, sessions, alerts, auditRows, miscues, clips, stories] = await Promise.all([
       prisma.learnerModel.findUnique({ where: { childId: child.id } }),
       prisma.readingSession.findMany({
         where: { childId: child.id },
@@ -52,6 +55,21 @@ export async function digestRoutes(app: FastifyInstance): Promise<void> {
         where: { session: { childId: child.id } },
         orderBy: { createdAt: 'desc' },
         take: 10
+      }),
+      prisma.story.findMany({
+        where: { childId: child.id },
+        orderBy: { createdAt: 'desc' },
+        take: 8,
+        select: {
+          id: true,
+          title: true,
+          level: true,
+          theme: true,
+          targetGrapheme: true,
+          source: true,
+          provenance: true,
+          createdAt: true
+        }
       })
     ]);
 
@@ -92,7 +110,65 @@ export async function digestRoutes(app: FastifyInstance): Promise<void> {
         accentApplied: m.accentApplied,
         accentNote: m.accentNote
       })),
-      audioClips: clips.map((c) => ({ id: c.id, createdAt: c.createdAt }))
+      audioClips: clips.map((c) => ({ id: c.id, createdAt: c.createdAt })),
+      // The raw material for the "why this story" section. The wording lives
+      // in core (explainStory) so the server and an offline browser produce
+      // the same sentences; the route ships facts, not prose.
+      stories: stories.map((story) => {
+        const provenance = readProvenance(story.provenance);
+        return {
+          id: story.id,
+          title: story.title,
+          level: story.level,
+          theme: story.theme,
+          targetGrapheme: story.targetGrapheme,
+          source: story.source,
+          createdAt: story.createdAt,
+          reviewGraphemes: provenance.reviewGraphemes,
+          generator: provenance.generator,
+          decisions: provenance.decisions
+        };
+      })
     };
   });
+}
+
+/**
+ * Read a story's provenance JSON defensively.
+ *
+ * The column is Prisma `Json`, so its shape is whatever the engine wrote at
+ * the time -- including rows written by an older PROMPT_VERSION, and the seed
+ * script's rows. A digest that throws on one malformed legacy row would take
+ * the whole screen down, so every field degrades to an empty default instead.
+ */
+interface ReadProvenance {
+  generator: string | null;
+  reviewGraphemes: string[];
+  decisions: PipelineDecisionLike[];
+}
+
+function readProvenance(raw: unknown): ReadProvenance {
+  const root = isRecord(raw) ? raw : {};
+  const constraints = isRecord(root.constraints) ? root.constraints : {};
+  return {
+    generator: typeof root.generator === 'string' ? root.generator : null,
+    reviewGraphemes: Array.isArray(constraints.reviewGraphemes)
+      ? constraints.reviewGraphemes.filter((g): g is string => typeof g === 'string')
+      : [],
+    decisions: Array.isArray(root.decisions)
+      ? root.decisions.filter(isDecision).map((d) => ({
+          check: d.check,
+          ok: d.ok,
+          ...(typeof d.detail === 'string' ? { detail: d.detail } : {})
+        }))
+      : []
+  };
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+function isDecision(value: unknown): value is { check: string; ok: boolean; detail?: unknown } {
+  return isRecord(value) && typeof value.check === 'string' && typeof value.ok === 'boolean';
 }

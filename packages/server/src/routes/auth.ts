@@ -6,6 +6,7 @@
  *  POST /api/auth/logout    revoke session
  *  GET  /api/auth/me        current parent
  *  POST /api/auth/consent   record child-voice consent (NFR-3)
+ *  POST /api/auth/locale    set the parent-layer language (FR-J)
  *
  * Passwords: Argon2id with the library's OWASP-aligned defaults. Login
  * failures are uniform ("invalid credentials") and the whole /auth prefix
@@ -14,6 +15,7 @@
 import { randomBytes } from 'node:crypto';
 import { hash, verify } from '@node-rs/argon2';
 import { z } from 'zod';
+import { LOCALES } from '@qissa/core';
 import type { FastifyInstance } from 'fastify';
 import { clearSessionCookie, createSession, setSessionCookie } from '../auth/session.js';
 import { ctx } from '../context.js';
@@ -56,6 +58,8 @@ function decoyHash(): Promise<string> {
   decoyHashPromise ??= hash(randomBytes(32).toString('hex'));
   return decoyHashPromise;
 }
+
+const LocaleSchema = z.object({ locale: z.enum(LOCALES) }).strict();
 
 export async function authRoutes(app: FastifyInstance): Promise<void> {
   const { prisma, env } = ctx(app);
@@ -115,7 +119,12 @@ export async function authRoutes(app: FastifyInstance): Promise<void> {
     // app calls this on load to re-seed the double-submit token from the live
     // session row — it is never a guess, only the value the session already
     // holds. See web/src/App.tsx + web/src/api/client.ts (auto-adopt).
-    return { email: parent.email, consentGivenAt: parent.consentGivenAt, csrfToken: session.csrfToken };
+    return {
+      email: parent.email,
+      consentGivenAt: parent.consentGivenAt,
+      locale: parent.locale,
+      csrfToken: session.csrfToken
+    };
   });
 
   /** Voice consent is recorded once and shown back on the digest screen.
@@ -127,5 +136,19 @@ export async function authRoutes(app: FastifyInstance): Promise<void> {
       await prisma.parent.update({ where: { id: parent.id }, data: { consentGivenAt } });
     }
     return reply.send({ consentGivenAt });
+  });
+
+  /** Parent-layer language. The child track is English either way (the phonics
+   *  scope teaches English graphemes), so this only ever changes what the
+   *  ADULT reads. Zod pins it to the supported set, so an unknown value can
+   *  never reach a catalog lookup. */
+  app.post('/locale', { preHandler: requireAuth(app) }, async (request, reply) => {
+    const body = parseBody(LocaleSchema, request.body, reply);
+    if (body === null) return;
+    await prisma.parent.update({
+      where: { id: request.auth.parent.id },
+      data: { locale: body.locale }
+    });
+    return reply.send({ locale: body.locale });
   });
 }

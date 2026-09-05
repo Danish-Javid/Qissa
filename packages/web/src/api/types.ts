@@ -5,7 +5,7 @@
  * pedagogy truth; these describe what crosses the network. Where the two
  * coincide (Story, LearnerModel) the client imports core directly.
  */
-import type { ChildSettings, LearningTrack, LessonPlan, Story, StoryPacing } from '@qissa/core';
+import type { ChildSettings, LearningTrack, LessonPlan, Locale, Story, StoryPacing } from '@qissa/core';
 
 export interface ChildSummary {
   id: string;
@@ -53,6 +53,9 @@ export interface AuthResponse {
   email: string;
   /** Double-submit CSRF token: stored client-side, echoed on mutations. */
   csrfToken: string;
+  /** Parent-layer language (FR-J). Absent on register/login, present on /me. */
+  locale?: Locale;
+  consentGivenAt?: string | null;
 }
 
 export interface StoryResponse {
@@ -129,6 +132,21 @@ export interface DigestResponse {
     accentNote: string | null;
   }>;
   audioClips: Array<{ id: string; createdAt: string }>;
+  /** Recent stories with the gate decisions that produced them, so the digest
+   *  can answer "why THIS story?" (FR-I.9). Wording comes from core's
+   *  explainStory; the payload carries facts only. */
+  stories: Array<{
+    id: string;
+    title: string;
+    level: number;
+    theme: string;
+    targetGrapheme: string;
+    source: 'generated' | 'cache' | 'deterministic-fallback';
+    createdAt: string;
+    reviewGraphemes: string[];
+    generator: string | null;
+    decisions: Array<{ check: string; ok: boolean; detail?: string }>;
+  }>;
 }
 
 export interface MetricsResponse {

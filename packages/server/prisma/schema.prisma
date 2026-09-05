@@ -28,6 +28,10 @@ model Parent {
   passwordHash String
   // Set once, at consent time (NFR-3). Shown back in the digest screen.
   consentGivenAt DateTime?
+  // Parent-layer language: 'en' | 'ur' (FR-J). Stored on the parent, not the
+  // child, because it is the ADULT who reads the dashboard and the digest --
+  // the child track stays English either way.
+  locale       String   @default("en")
   createdAt    DateTime @default(now())
 
   children     Child[]
