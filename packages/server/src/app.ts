@@ -22,6 +22,7 @@ import fastifyStatic from '@fastify/static';
 import type { AppContext } from './context.js';
 import { authRoutes } from './routes/auth.js';
 import { childrenRoutes } from './routes/children.js';
+import { demoRoutes } from './routes/demo.js';
 import { digestRoutes } from './routes/digest.js';
 import { earlyRoutes } from './routes/early.js';
 import { healthRoutes, metricsRoutes } from './routes/health.js';
@@ -83,6 +84,7 @@ export async function buildApp(appCtx: AppContext): Promise<FastifyInstance> {
     // because registering the plugin globally does not narrow a prefix.
     await api.register(authRoutes, { prefix: '/auth' });
     await api.register(childrenRoutes, { prefix: '/children' });
+    await api.register(demoRoutes, { prefix: '/demo' });
     await api.register(earlyRoutes, { prefix: '/early' });
     await api.register(lessonRoutes, { prefix: '/lessons' });
     await api.register(storyRoutes, { prefix: '/stories' });

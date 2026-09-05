@@ -241,6 +241,9 @@ export function Dashboard() {
       </section>
 
       <footer className="flex justify-between text-sm">
+        <Link to="/parent/demo" className="text-leaf underline">
+          Demo control
+        </Link>
         <Link to="/parent/archive" className="text-leaf underline">
           Story archive
         </Link>
