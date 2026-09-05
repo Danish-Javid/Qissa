@@ -9,6 +9,7 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { api } from '../api/client.js';
+import { ConnectionBadge } from '../lib/ConnectionBadge.js';
 import type { MetricsResponse } from '../api/types.js';
 
 export function Pipeline() {
@@ -32,6 +33,12 @@ export function Pipeline() {
           ← Back to dashboard
         </Link>
       </header>
+
+      {/* Resilience, demonstrable rather than asserted. */}
+      <section className="rounded-2xl bg-white p-6 shadow">
+        <h2 className="mb-3 text-lg font-bold">Connection</h2>
+        <ConnectionBadge />
+      </section>
 
       {metrics === null ? (
         <p className="text-sm text-ink/60">Loading audit metrics…</p>

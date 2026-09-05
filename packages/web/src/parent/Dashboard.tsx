@@ -191,6 +191,22 @@ export function Dashboard() {
                       </select>
                     </label>
 
+                    <label className="flex items-center justify-between gap-2 text-xs font-semibold text-ink/70">
+                      <span>
+                        Low-bandwidth mode
+                        <span className="block text-[11px] font-normal text-ink/50">
+                          Simple drawn pictures instead of generated art — much less mobile data
+                        </span>
+                      </span>
+                      <input
+                        type="checkbox"
+                        className="h-5 w-5 accent-leaf"
+                        checked={child.settings.lowBandwidth === true}
+                        disabled={busyId === child.id}
+                        onChange={(e) => void updateSettings(child.id, { lowBandwidth: e.target.checked })}
+                      />
+                    </label>
+
                     <label className="block text-xs font-semibold text-ink/70">
                       Daily session cap (minutes)
                       <input

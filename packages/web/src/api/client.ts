@@ -12,6 +12,7 @@
  *    row in constant time.
  *  - 401 anywhere drops the token and sends the parent to /parent/login.
  */
+import { SimulatedOfflineError, isSimulatingOffline } from '../lib/connection.js';
 import type { AuthResponse } from './types.js';
 
 const CSRF_KEY = 'qissa.csrf';
@@ -39,6 +40,12 @@ export class ApiError extends Error {
 }
 
 async function request<T>(method: 'GET' | 'POST', path: string, body?: unknown): Promise<T> {
+  // The demo's offline switch fails here, before the fetch, so the app takes
+  // the genuine degraded path (mirrored story, browser voice, no session row)
+  // rather than a special "pretend offline" branch. Callers already handle a
+  // rejected request; this is indistinguishable from a pulled cable.
+  if (isSimulatingOffline()) throw new SimulatedOfflineError();
+
   const headers: Record<string, string> = { Accept: 'application/json' };
   if (body !== undefined) headers['Content-Type'] = 'application/json';
   const token = csrfToken();

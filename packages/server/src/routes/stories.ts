@@ -14,6 +14,7 @@ import { z } from 'zod';
 import type { FastifyInstance } from 'fastify';
 import { ageInYears, ctx, rawAgeInYears } from '../context.js';
 import { stylePrompt } from '../providers/art-style.js';
+import { MockImageGenerator } from '../providers/mock/index.js';
 import type { ImageResult } from '../providers/interfaces.js';
 import { prefetchStory, serveStory } from '../story/story-engine.js';
 import { denyNotFound, ownedChild, requireAuth } from './guards.js';
@@ -39,6 +40,22 @@ const illustrationDir = path.resolve(process.cwd(), 'data', 'illustrations');
 /** In-flight generation dedup — the client prefetches pages while the <img>
  *  for the current page fires; both must share ONE vendor call, not two. */
 const pendingImages = new Map<string, Promise<ImageResult>>();
+
+/**
+ * The deterministic house-style placeholder used by low-bandwidth mode. One
+ * instance, because it holds no per-request state and drawing an SVG is pure.
+ */
+const placeholderImages = new MockImageGenerator();
+
+/**
+ * Pick the image source for a child: the configured vendor, or the local
+ * placeholder when the parent has asked for low-bandwidth mode. Returning the
+ * SAME object reference as `providers.images` when the setting is off is what
+ * lets the caller detect the mode with a cheap identity check.
+ */
+function chooseImages<T>(settings: unknown, vendor: T): T | MockImageGenerator {
+  return parseChildSettings(settings).lowBandwidth === true ? placeholderImages : vendor;
+}
 
 export async function storyRoutes(app: FastifyInstance): Promise<void> {
   const { prisma, providers } = ctx(app);
@@ -178,7 +195,7 @@ export async function storyRoutes(app: FastifyInstance): Promise<void> {
 
     const story = await prisma.story.findUnique({
       where: { id: params.id },
-      include: { child: { select: { parentId: true } } }
+      include: { child: { select: { parentId: true, settings: true } } }
     });
     if (story === null || story.child.parentId !== request.auth.parent.id) return denyNotFound(reply);
 
@@ -187,8 +204,18 @@ export async function storyRoutes(app: FastifyInstance): Promise<void> {
     if (page === undefined) return denyNotFound(reply);
     const hint = page.illustrationHint ?? 'a warm storybook scene';
 
-    const ext = providers.mode === 'mock' ? 'svg' : 'png';
-    const filePath = path.join(illustrationDir, `${story.id}-${params.page}.${ext}`);
+    // Low-bandwidth mode: draw the deterministic house-style placeholder
+    // locally instead of calling the image vendor. On a metered Pakistani
+    // mobile connection a generated PNG per page is by far the heaviest thing
+    // this app does, so a parent can ask for words-only without giving up the
+    // story. Cached under a distinct suffix so switching the setting back does
+    // not serve a placeholder from the real image's cache slot.
+    const images = chooseImages(story.child.settings, providers.images);
+    const lowBandwidth = images !== providers.images;
+
+    const ext = lowBandwidth || providers.mode === 'mock' ? 'svg' : 'png';
+    const suffix = lowBandwidth ? '-lite' : '';
+    const filePath = path.join(illustrationDir, `${story.id}-${params.page}${suffix}.${ext}`);
     try {
       const cached = await readFile(filePath);
       return reply.type(ext === 'svg' ? 'image/svg+xml' : 'image/png').send(cached);
@@ -201,7 +228,7 @@ export async function storyRoutes(app: FastifyInstance): Promise<void> {
       if (pending === undefined) {
         // The scene hint is merged with the house art direction (researched
         // kid-loved style) so every provider draws in the same warm world.
-        pending = providers.images.generateImage(stylePrompt(hint));
+        pending = images.generateImage(stylePrompt(hint));
         pendingImages.set(filePath, pending);
         pending.catch(() => undefined).finally(() => pendingImages.delete(filePath));
       }
@@ -230,15 +257,21 @@ export async function storyRoutes(app: FastifyInstance): Promise<void> {
 
     const story = await prisma.story.findUnique({
       where: { id: params.id },
-      include: { child: { select: { parentId: true, name: true } } }
+      include: { child: { select: { parentId: true, name: true, settings: true } } }
     });
     if (story === null || story.child.parentId !== request.auth.parent.id) return denyNotFound(reply);
 
     const content = story.content as unknown as { theme?: string };
     const hint = `a joyful storybook celebration keepsake: ${story.child.name} cheering proudly, confetti and warm golden light, a happy bravo ending, ${content.theme ?? 'kindness'} theme`;
 
-    const ext = providers.mode === 'mock' ? 'svg' : 'png';
-    const filePath = path.join(illustrationDir, `${story.id}-gift.${ext}`);
+    // The gift honours low-bandwidth mode too. A parent who asked not to spend
+    // data on page art did not quietly agree to spend it on the reward.
+    const images = chooseImages(story.child.settings, providers.images);
+    const lowBandwidth = images !== providers.images;
+
+    const ext = lowBandwidth || providers.mode === 'mock' ? 'svg' : 'png';
+    const suffix = lowBandwidth ? '-gift-lite' : '-gift';
+    const filePath = path.join(illustrationDir, `${story.id}${suffix}.${ext}`);
     try {
       const cached = await readFile(filePath);
       return reply.type(ext === 'svg' ? 'image/svg+xml' : 'image/png').send(cached);
@@ -249,7 +282,7 @@ export async function storyRoutes(app: FastifyInstance): Promise<void> {
     try {
       let pending = pendingImages.get(filePath);
       if (pending === undefined) {
-        pending = providers.images.generateImage(stylePrompt(hint));
+        pending = images.generateImage(stylePrompt(hint));
         pendingImages.set(filePath, pending);
         pending.catch(() => undefined).finally(() => pendingImages.delete(filePath));
       }

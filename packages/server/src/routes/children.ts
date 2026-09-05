@@ -71,7 +71,8 @@ const ChildSettingsSchema = z
     learningTrack: z.enum(['first-words', 'learn-to-read']).nullable().optional(),
     storyPacing: z.enum(['fluent', 'slow']).optional(),
     storyTimeEnabled: z.boolean().optional(),
-    sessionCapMinutes: z.number().int().min(1).max(60).nullable().optional()
+    sessionCapMinutes: z.number().int().min(1).max(60).nullable().optional(),
+    lowBandwidth: z.boolean().optional()
   })
   .strict();
 
@@ -187,6 +188,14 @@ export async function childrenRoutes(app: FastifyInstance): Promise<void> {
       if (body.sessionCapMinutes === null) delete merged.sessionCapMinutes;
       else merged.sessionCapMinutes = body.sessionCapMinutes;
     }
+    if (body.lowBandwidth !== undefined) merged.lowBandwidth = body.lowBandwidth;
+
+    // NOTE: this merge is field-by-field on purpose (a null clears an override,
+    // which a spread cannot express), but that means a new key added to
+    // ChildSettingsSchema and NOT added here validates fine and is then
+    // silently dropped — the request even answers 200. `children.test.ts`
+    // asserts every optional key in the schema round-trips, so the next
+    // setting cannot be lost the way lowBandwidth first was.
 
     const updated = await prisma.child.update({
       where: { id: child.id },
