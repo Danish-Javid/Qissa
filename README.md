@@ -138,6 +138,12 @@ refuses to start on a bad value.
 | `SEED_PARENT_EMAIL` | `demo@qissa.app` | Demo account email |
 | `SEED_PARENT_PASSWORD` | `change-me-before-demo` | Demo account password — change before the stage |
 
+Before demoing against a real vendor, run `npm run verify:providers`. It makes
+the smallest real call to each of the four capabilities in the configured mode
+and prints a pass/fail table with latency, so a wrong region, a missing
+deployment or a bad key is found at a desk rather than on stage. Every check is
+independent — knowing *which* of the four is misconfigured is the point.
+
 **Nothing in this file can reach the browser.** The Vite env allowlist is empty
 by design; the web bundle talks only to our own server, and every vendor call is
 proxied server-side.
@@ -200,6 +206,9 @@ npm test -w @qissa/server            # 49 tests (7 files) — pipeline, orchestr
                                      #   route surface, auth hardening
 npm test -w @qissa/web               # 6 tests (1 file) — api client: 401 handling, CSRF
 npm run seed -w @qissa/server        # demo history (needs DATABASE_URL)
+npm run verify:providers             # live check of all four vendors in the
+                                     #   configured PROVIDER_MODE (costs money
+                                     #   in alibaba/azure; safe in mock)
 npm run check                        # lint + test + build, the whole gate
 ```
 

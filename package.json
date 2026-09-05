@@ -22,6 +22,7 @@
     "db:push": "npm run db:push -w @qissa/server",
     "db:migrate": "npm run db:migrate -w @qissa/server",
     "seed": "npm run seed -w @qissa/server",
+    "verify:providers": "npm run verify:providers -w @qissa/server",
     "check": "npm run lint && npm run test && npm run build"
   },
   "devDependencies": {

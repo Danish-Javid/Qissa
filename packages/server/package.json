@@ -15,7 +15,8 @@
     "db:push": "prisma db push --schema prisma/schema.prisma",
     "db:migrate": "prisma migrate dev --schema prisma/schema.prisma",
     "db:deploy": "prisma migrate deploy --schema prisma/schema.prisma",
-    "seed": "tsx src/seed/seed.ts"
+    "seed": "tsx src/seed/seed.ts",
+    "verify:providers": "tsx src/scripts/verify-providers.ts"
   },
   "dependencies": {
     "@fastify/cookie": "^11.0.2",
