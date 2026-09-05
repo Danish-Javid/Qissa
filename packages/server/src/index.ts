@@ -44,7 +44,7 @@ async function main(): Promise<void> {
 
 main().catch((err) => {
   // Boot failures must be loud and readable in docker logs.
-  // eslint-disable-next-line no-console
+   
   console.error('[qissa] failed to start:', err);
   process.exit(1);
 });

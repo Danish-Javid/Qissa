@@ -56,7 +56,7 @@ describe('CROWD rotation (FR-D.2)', () => {
   });
 
   it('budget exhaustion ends the page dialogue cleanly', () => {
-    let state = createPeerState(7, 1, 0); // budget 0 on odd pages at age 7
+    const state = createPeerState(7, 1, 0); // budget 0 on odd pages at age 7
     const r = nextPrompt(state, ctx);
     expect(r.action).toBeNull();
     expect(r.state.pageDone).toBe(true);

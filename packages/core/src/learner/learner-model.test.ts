@@ -68,7 +68,7 @@ describe('applyWordOutcomes', () => {
 
 describe('introduceNextGrapheme', () => {
   it('teaches the sequence in order and levels up with the data', () => {
-    let m = createLearnerModel(1);
+    const m = createLearnerModel(1);
     const first = introduceNextGrapheme(m);
     expect(first.introduced).toBe('s');
     const second = introduceNextGrapheme(first.model);
