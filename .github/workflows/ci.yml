@@ -6,8 +6,9 @@
 #   docker  — proves `docker compose up --build` still works, which is the
 #             single command the judges will run; a broken Dockerfile is a
 #             demo-day failure that unit tests cannot catch
-#   audit   — dependency advisories, reported but not blocking (see README
-#             §"Known accepted advisory" for the Prisma CLI deepmerge-ts case)
+#   audit   — advisories reported always; fails only on CRITICAL, because the
+#             one outstanding high is documented and accepted (README
+#             §"Known accepted advisory": the Prisma CLI deepmerge-ts case)
 name: CI
 
 on:
@@ -115,9 +116,6 @@ jobs:
     name: Dependency audit
     runs-on: ubuntu-latest
     timeout-minutes: 10
-    # Non-blocking: the one high advisory is a documented, accepted risk in
-    # the Prisma CLI (build-time only, never in the request path).
-    continue-on-error: true
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -125,4 +123,16 @@ jobs:
           node-version: 24
           cache: npm
       - run: npm ci
-      - run: npm run audit:deps
+
+      # Always print the high-and-above report so a new advisory is visible in
+      # the log even when it does not fail the build.
+      - name: Report advisories (informational)
+        run: npm audit --audit-level=high || true
+
+      # Fail only on CRITICAL. The one outstanding high advisory is the
+      # documented, accepted Prisma CLI case (build-time only, never in the
+      # request path) -- see README "Known accepted advisory". Using
+      # continue-on-error instead would still render a red X on every PR,
+      # training everyone to ignore the audit entirely.
+      - name: Fail on critical advisories
+        run: npm audit --audit-level=critical

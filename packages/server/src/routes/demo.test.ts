@@ -7,7 +7,7 @@
  * minute before going on stage must not be able to delete a real child's
  * reading history.
  */
-import { describe, expect, it, vi } from 'vitest';
+import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { PrismaClient } from '@prisma/client';
 import { buildApp } from '../app.js';
 import { loadEnv } from '../config.js';
@@ -35,23 +35,33 @@ function fakePrisma() {
   return { prisma, deleteMany, auditCreate };
 }
 
-async function app(prisma: PrismaClient) {
+// One app for the whole file: a cold buildApp registers helmet, cors, the rate
+// limiter and every route, which costs ~4.5s on a CI runner. Building it per
+// test made this file the slowest in the suite for no added coverage.
+const { prisma, deleteMany } = fakePrisma();
+let instance: Awaited<ReturnType<typeof buildApp>>;
+
+beforeAll(async () => {
   const env = loadEnv({ DATABASE_URL: 'postgresql://test', LOG_LEVEL: 'silent' });
-  const instance = await buildApp({
+  instance = await buildApp({
     prisma,
     env,
     providers: getProviders(env),
     orchestrator: new SessionOrchestrator(prisma, env)
   });
   await instance.ready();
-  return instance;
-}
+});
+
+afterAll(async () => {
+  await instance.close();
+});
+
+beforeEach(() => {
+  deleteMany.mockClear();
+});
 
 describe('POST /api/demo/reset', () => {
   it('deletes only demo children, and only the caller’s own', async () => {
-    const { prisma, deleteMany } = fakePrisma();
-    const instance = await app(prisma);
-
     const res = await instance.inject({
       method: 'POST',
       url: '/api/demo/reset',
@@ -65,24 +75,16 @@ describe('POST /api/demo/reset', () => {
     expect(deleteMany.mock.calls[0]![0]).toEqual({
       where: { parentId: PARENT.id, isDemo: true }
     });
-    await instance.close();
   });
 
   it('refuses without a session', async () => {
-    const { prisma, deleteMany } = fakePrisma();
-    const instance = await app(prisma);
-
     const res = await instance.inject({ method: 'POST', url: '/api/demo/reset', payload: {} });
 
     expect(res.statusCode).toBe(401);
     expect(deleteMany, 'an unauthenticated request must never reach a delete').not.toHaveBeenCalled();
-    await instance.close();
   });
 
   it('refuses without the CSRF token', async () => {
-    const { prisma, deleteMany } = fakePrisma();
-    const instance = await app(prisma);
-
     const res = await instance.inject({
       method: 'POST',
       url: '/api/demo/reset',
@@ -92,15 +94,11 @@ describe('POST /api/demo/reset', () => {
 
     expect(res.statusCode).toBe(403);
     expect(deleteMany).not.toHaveBeenCalled();
-    await instance.close();
   });
 });
 
 describe('POST /api/demo/seed', () => {
   it('rejects a story count outside the supported range', async () => {
-    const { prisma } = fakePrisma();
-    const instance = await app(prisma);
-
     const res = await instance.inject({
       method: 'POST',
       url: '/api/demo/seed',
@@ -109,13 +107,9 @@ describe('POST /api/demo/seed', () => {
     });
 
     expect(res.statusCode).toBe(400);
-    await instance.close();
   });
 
   it('rejects unknown fields rather than silently ignoring them', async () => {
-    const { prisma } = fakePrisma();
-    const instance = await app(prisma);
-
     const res = await instance.inject({
       method: 'POST',
       url: '/api/demo/seed',
@@ -124,6 +118,5 @@ describe('POST /api/demo/seed', () => {
     });
 
     expect(res.statusCode).toBe(400);
-    await instance.close();
   });
 });
