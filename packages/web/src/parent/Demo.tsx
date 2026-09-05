@@ -103,6 +103,24 @@ export function Demo() {
         </p>
       </section>
 
+      <section className="rounded-2xl bg-white p-6 shadow">
+        <h2 className="text-lg font-bold">Showing progress over time</h2>
+        <p className="mt-1 text-sm text-ink/70">
+          The seeder above creates a <em>fresh</em> child, so its stories are real but its reading
+          history is empty — the fluency trend and the certificate will have nothing to show yet.
+          That is honest, not a bug: nothing has been read.
+        </p>
+        <p className="mt-2 text-sm text-ink/70">
+          For the surfaces that need history, run the six-week demo family instead:
+        </p>
+        <pre className="mt-2 overflow-x-auto rounded-xl bg-paper p-3 text-xs">
+          docker compose exec app node packages/server/dist/seed/seed.js
+        </pre>
+        <p className="mt-2 text-xs text-ink/50">
+          Then sign in with SEED_PARENT_EMAIL / SEED_PARENT_PASSWORD from your .env.
+        </p>
+      </section>
+
       {status.kind === 'busy' && (
         <p className="rounded-2xl bg-gold/10 p-4 text-sm text-ink/70">{status.what}</p>
       )}

@@ -148,6 +148,36 @@ independent — knowing *which* of the four is misconfigured is the point.
 by design; the web bundle talks only to our own server, and every vendor call is
 proxied server-side.
 
+## The parent layer
+
+| Surface | Route | What it does |
+|---|---|---|
+| Dashboard | `/parent` | Children, per-child controls, language switch |
+| Digest | `/parent/digest/:id` | Progress, miscues, retained clips, and **why each story was chosen** — the gate decisions rendered as sentences, with the raw event still one click away |
+| Certificate | `/parent/certificate/:id` | A printable certificate built from audited numbers only; WhatsApp share |
+| Archive | `/parent/archive` | Device-local list of stories served |
+| Pipeline | `/parent/pipeline` | The honesty view: rejection rate, vendor spend, budget, accent catches, and the offline switch |
+| Demo control | `/parent/demo` | One-tap stage setup and reset |
+
+**Bilingual (English / اردو).** The parent layer — dashboard, digest, reasoning,
+certificate — is fully translated, RTL-aware, with Eastern Arabic-Indic numerals.
+The **child track stays English**: the phonics scope teaches English graphemes,
+and swapping scripts mid-lesson would break the very thing being taught. What
+does cross over is First Words' coaching line for the co-viewing adult
+("دیکھو — ball!"), because code-switching is how a Pakistani parent actually
+teaches a toddler. The catalog is typed `Record<MessageKey, string>` per locale,
+so a missing translation is a compile error rather than a blank screen on stage.
+
+**Low-bandwidth mode** (per child, in Modes & controls) skips vendor image
+generation and serves the deterministic house-style SVG. On a metered mobile
+connection a generated PNG per page is the heaviest thing this app does; every
+pedagogy gate is untouched, only the picture changes.
+
+**Demo control** creates a child and generates stories through the *real*
+pipeline — nothing on the demo screen is a fixture, so the pipeline view stays
+truthful. Reset is scoped to the caller's own `isDemo` rows, so it cannot touch
+a real child's history.
+
 ## Security posture
 
 1. **No secrets in the browser.** Keys live in `.env` (git-ignored), read once at
@@ -201,10 +231,13 @@ npm install                          # workspaces: core, server, web
 npm run build -w @qissa/core         # server consumes core from dist/
 npm run dev -w @qissa/server         # needs a local DATABASE_URL
 npm run dev -w @qissa/web            # Vite dev server, proxies /api → :3000
-npm test -w @qissa/core              # 136 tests (10 files) — engines, learner, modes, data spine
-npm test -w @qissa/server            # 49 tests (7 files) — pipeline, orchestrator, red team, safety,
-                                     #   route surface, auth hardening
-npm test -w @qissa/web               # 6 tests (1 file) — api client: 401 handling, CSRF
+npm test -w @qissa/core              # 160 tests (11 files) — engines, learner, modes, data
+                                     #   spine, i18n catalog + story explainer
+npm test -w @qissa/server            # 71 tests (10 files) — pipeline, orchestrator, red team,
+                                     #   safety, route surface, auth hardening, demo
+                                     #   scope, child settings, provider contracts
+npm test -w @qissa/web               # 21 tests (3 files) — api client 401/CSRF, offline
+                                     #   cache + storage failures, offline switch
 npm run seed -w @qissa/server        # demo history (needs DATABASE_URL)
 npm run verify:providers             # live check of all four vendors in the
                                      #   configured PROVIDER_MODE (costs money
