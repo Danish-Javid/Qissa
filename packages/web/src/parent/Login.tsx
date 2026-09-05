@@ -11,12 +11,18 @@ import { useState, type FormEvent } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { api } from '../api/client.js';
 import type { AuthResponse } from '../api/types.js';
+import { Illustration } from '../lib/Illustration.js';
 
 export function Login() {
   const navigate = useNavigate();
   const [mode, setMode] = useState<'login' | 'register'>('login');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  // Registration only. Kept out of the login payload entirely rather than sent
+  // as empty strings, which the server's strict schema would reject.
+  const [fullName, setFullName] = useState('');
+  const [birthDate, setBirthDate] = useState('');
+  const [isGuardian, setIsGuardian] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
@@ -25,7 +31,11 @@ export function Login() {
     setBusy(true);
     setError(null);
     try {
-      const response = await api.post<AuthResponse>(`/auth/${mode}`, { email, password });
+      const payload =
+        mode === 'register'
+          ? { email, password, fullName, birthDate, isGuardian }
+          : { email, password };
+      const response = await api.post<AuthResponse>(`/auth/${mode}`, payload);
       api.adoptAuth(response);
       navigate('/parent');
     } catch (err) {
@@ -53,8 +63,7 @@ export function Login() {
               feelings — built fresh for your child every time.
             </p>
           </div>
-          <img
-            src="/landing/scene-parent.png"
+          <Illustration             src="/landing/scene-parent.png"
             alt="A parent and child reading a storybook together"
             className="w-full rounded-2xl shadow-lg"
           />
@@ -74,6 +83,21 @@ export function Login() {
             </p>
           </div>
 
+          {mode === 'register' && (
+            <label className="block text-sm font-semibold">
+              Your full name
+              <input
+                type="text"
+                required
+                minLength={2}
+                maxLength={80}
+                autoComplete="name"
+                className="input-parent mt-1"
+                value={fullName}
+                onChange={(e) => setFullName(e.target.value)}
+              />
+            </label>
+          )}
           <label className="block text-sm font-semibold">
             Email
             <input
@@ -99,6 +123,44 @@ export function Login() {
             />
           </label>
 
+          {mode === 'register' && (
+            <>
+              <label className="block text-sm font-semibold">
+                Your date of birth
+                <span className="block text-xs font-normal text-ink/50">
+                  Yours, not your child's — accounts are for grown-ups.
+                </span>
+                <input
+                  type="date"
+                  required
+                  // Bounds the picker to plausible adult birth years. The server
+                  // re-checks the age; this is only here so the calendar opens
+                  // somewhere sensible instead of on today's date.
+                  max={maxAdultBirthDate()}
+                  min="1906-01-01"
+                  autoComplete="bday"
+                  className="input-parent mt-1"
+                  value={birthDate}
+                  onChange={(e) => setBirthDate(e.target.value)}
+                />
+              </label>
+
+              <label className="flex items-start gap-3 text-sm">
+                <input
+                  type="checkbox"
+                  required
+                  className="mt-1 h-5 w-5 shrink-0 accent-leaf"
+                  checked={isGuardian}
+                  onChange={(e) => setIsGuardian(e.target.checked)}
+                />
+                <span className="text-ink/75">
+                  I am the parent or legal guardian of the child who will use Qissa, and I consent to
+                  their use of it.
+                </span>
+              </label>
+            </>
+          )}
+
           {error !== null && <p className="rounded-lg bg-clay/10 p-2 text-sm text-clay">{error}</p>}
 
           <button type="submit" className="btn-parent w-full py-3" disabled={busy}>
@@ -116,4 +178,11 @@ export function Login() {
       </div>
     </div>
   );
+}
+
+/** Today minus 18 years, as YYYY-MM-DD — the latest date the picker allows. */
+function maxAdultBirthDate(): string {
+  const d = new Date();
+  d.setUTCFullYear(d.getUTCFullYear() - 18);
+  return d.toISOString().slice(0, 10);
 }

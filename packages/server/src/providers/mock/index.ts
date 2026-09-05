@@ -19,6 +19,7 @@
 import {
   wordBanks,
   foundationGroup,
+  pictogramFor,
   isBootstrap,
   isWordDecodable,
   tokenize,
@@ -451,20 +452,44 @@ export class MockSpeechSynthesizer implements ISpeechSynthesizer {
 
 export class MockImageGenerator implements IImageGenerator {
   readonly name = 'mock-svg';
-  readonly model = 'flat-svg-placeholder';
+  readonly model = 'pictogram-svg';
 
-  async generateImage(hint: string): Promise<ImageResult> {
-    // Flat three-ink palette per the art direction; text is escaped so a
-    // hostile hint can never inject markup (XSS-in-SVG is still XSS).
-    const safeHint = escapeXml(hint.slice(0, 80));
+  /**
+   * Draw the SUBJECT of the hint, not a generic arrangement of shapes.
+   *
+   * The previous version emitted the same circle-and-rectangle for every
+   * prompt, so an apple, a cat and a bus were pixel-identical. That reads as a
+   * broken image, and it quietly defeated the pedagogy: pairing a picture with
+   * a decodable word only teaches anything if the picture shows the referent.
+   *
+   * The glyph comes from core's pictogram table (the same allow-list that
+   * bounds word art), and the palette is derived from the subject, so two
+   * different words never render the same picture even when neither has a
+   * pictogram. Deterministic throughout — the on-disk art cache and the
+   * offline path both require that the same hint always yields the same bytes.
+   */
+  async generateImage(hint: string, subject?: string): Promise<ImageResult> {
+    // Prefer the caller's explicit subject; fall back to the hint only when
+    // there isn't one (nothing in the tree currently omits it).
+    const { glyph, word, palette } = pictogramFor(subject ?? hint);
+    // The caption is the WORD, never the raw prompt: a hint is engine text
+    // (and, for story pages, model output) and has no business on a child's
+    // screen. Escaped anyway — XSS-in-SVG is still XSS.
+    const caption = escapeXml((word ?? '').slice(0, 24));
+
     const svg = [
-      `<svg xmlns="http://www.w3.org/2000/svg" width="480" height="360" viewBox="0 0 480 360">`,
-      `<rect width="480" height="360" fill="#fdf6e3"/>`,
-      `<circle cx="400" cy="70" r="36" fill="#f4a259"/>`,
-      `<rect y="270" width="480" height="90" fill="#8ab17d"/>`,
-      `<circle cx="140" cy="240" r="42" fill="#2a9d8f"/>`,
-      `<rect x="220" y="200" width="70" height="70" rx="10" fill="#e76f51"/>`,
-      `<text x="24" y="340" font-family="sans-serif" font-size="16" fill="#264653">${safeHint}</text>`,
+      `<svg xmlns="http://www.w3.org/2000/svg" width="480" height="360" viewBox="0 0 480 360" role="img" aria-label="${caption}">`,
+      `<rect width="480" height="360" fill="${palette.sky}"/>`,
+      `<circle cx="404" cy="64" r="34" fill="${palette.accent}" opacity="0.85"/>`,
+      `<ellipse cx="240" cy="330" rx="200" ry="46" fill="${palette.ground}" opacity="0.35"/>`,
+      `<rect y="296" width="480" height="64" fill="${palette.ground}"/>`,
+      // Emoji render from the system font; the stack lists the three that ship
+      // with Windows, Apple and Android, then degrades to whatever is present.
+      `<text x="240" y="212" font-size="168" text-anchor="middle"`,
+      ` font-family="Segoe UI Emoji, Apple Color Emoji, Noto Color Emoji, sans-serif">${glyph}</text>`,
+      caption === ''
+        ? ''
+        : `<text x="240" y="340" font-size="30" text-anchor="middle" font-family="Andika, Verdana, sans-serif" font-weight="700" fill="#fdf6e3">${caption}</text>`,
       `</svg>`
     ].join('');
     return { image: new TextEncoder().encode(svg), mimeType: 'image/svg+xml', costMicroUsd: 0 };

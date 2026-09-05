@@ -16,6 +16,7 @@
  */
 import { useEffect } from 'react';
 import { Link } from 'react-router-dom';
+import { Illustration } from './lib/Illustration.js';
 
 /** Small inline icons keep the page dependency-free and CSP-'self'. */
 function Icon({ d, className }: { d: string; className?: string }) {
@@ -188,7 +189,7 @@ export function Landing() {
           {/* The maximalist visual: art + floating proof chips */}
           <div className="relative">
             <div className="book-page pop-in rotate-1 p-3" style={{ animationDelay: '120ms' }}>
-              <img src="/landing/hero.png" alt="A child reading a book aloud to a friendly fox buddy on a grassy hill" className="w-full rounded-[26px]" />
+              <Illustration eager src="/landing/hero.png" alt="A child reading a book aloud to a friendly fox buddy on a grassy hill" className="w-full rounded-[26px]" />
             </div>
             <div className="book-page buddy-float absolute -top-5 -left-4 flex items-center gap-2 px-4 py-2.5 !rounded-3xl">
               <Icon d={icons.star} className="h-5 w-5 text-gold" />
@@ -272,7 +273,7 @@ export function Landing() {
               </div>
               <div className="mt-10 flex items-end justify-center gap-4">
                 <div className="bubble text-base">You read it!</div>
-                <img src="/landing/buddy.png" alt="The Qissa fox buddy cheering" className="buddy-float h-24 w-24 rounded-full object-cover" />
+                <Illustration src="/landing/buddy.png" alt="The Qissa fox buddy cheering" className="buddy-float h-24 w-24 rounded-full object-cover" />
               </div>
             </div>
           </div>
@@ -321,7 +322,7 @@ export function Landing() {
           ))}
         </div>
         <div className="mt-16 grid items-center gap-10 lg:grid-cols-2">
-          <img src="/landing/scene-read.png" alt="A child reading aloud while the fox buddy listens" className="book-page card-lift reveal w-full p-3" />
+          <Illustration src="/landing/scene-read.png" alt="A child reading aloud while the fox buddy listens" className="book-page card-lift reveal w-full p-3" />
           <div className="reveal">
             <h3 className="font-story text-3xl leading-tight font-bold">The buddy never corrects like a test. It helps like a friend.</h3>
             <p className="mt-4 text-lg leading-relaxed text-ink/75">
@@ -329,7 +330,7 @@ export function Landing() {
               hard, the story smiles and moves on — confidence first, always. That wobble is
               quietly scheduled back into tomorrow’s story for review.
             </p>
-            <img src="/landing/scene-parent.png" alt="A parent and child reading together in warm evening light" className="book-page mt-8 w-full max-w-sm p-3" />
+            <Illustration src="/landing/scene-parent.png" alt="A parent and child reading together in warm evening light" className="book-page mt-8 w-full max-w-sm p-3" />
             <p className="mt-4 text-sm font-semibold text-ink/60">And at bedtime, your digest: what they read, what is growing, what tomorrow holds.</p>
           </div>
         </div>
@@ -379,7 +380,7 @@ export function Landing() {
       <section className="relative overflow-hidden bg-gradient-to-b from-sky to-paper py-24">
         <div className="cloud-drift absolute top-8 left-0 h-9 w-24 rounded-full bg-white/80" style={{ animationDuration: '90s' }} />
         <div className="reveal mx-auto flex max-w-3xl flex-col items-center px-6 text-center">
-          <img src="/landing/buddy.png" alt="The Qissa fox buddy waving and holding a book" className="buddy-float w-44" />
+          <Illustration src="/landing/buddy.png" alt="The Qissa fox buddy waving and holding a book" className="buddy-float w-44" />
           <h2 className="mt-8 font-story text-4xl font-bold sm:text-5xl">The first book is waiting.</h2>
           <p className="mt-4 max-w-md text-lg text-ink/75">Two minutes of setup. Then story time writes itself around your child.</p>
           <Link to="/parent" className="btn-big btn-face-leaf btn-glow mt-9">Begin story time — free</Link>

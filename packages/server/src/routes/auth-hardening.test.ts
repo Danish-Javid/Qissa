@@ -79,3 +79,66 @@ describe('credential endpoint hardening', () => {
     await instance.close();
   });
 });
+
+/**
+ * Registration's grown-up gate.
+ *
+ * Worth being precise about what this is: a self-reported date of birth is an
+ * age GATE, not identity verification. It stops a child casually making their
+ * own account and records a timestamped guardian attestation. It does not prove
+ * parenthood, and these tests do not pretend otherwise.
+ */
+describe('registration requires a grown-up', () => {
+  function registration(overrides: Record<string, unknown> = {}) {
+    const eighteenPlus = new Date();
+    eighteenPlus.setUTCFullYear(eighteenPlus.getUTCFullYear() - 30);
+    return {
+      email: `p${Math.random().toString(36).slice(2)}@example.com`,
+      password: 'a-very-long-password',
+      fullName: 'Aisha Khan',
+      birthDate: eighteenPlus.toISOString().slice(0, 10),
+      isGuardian: true,
+      ...overrides
+    };
+  }
+
+  async function register(payload: unknown) {
+    const prisma = fakePrisma(async () => null);
+    const instance = await app(prisma);
+    const res = await instance.inject({ method: 'POST', url: '/api/auth/register', payload });
+    await instance.close();
+    return res;
+  }
+
+  it('rejects a date of birth under 18', async () => {
+    const child = new Date();
+    child.setUTCFullYear(child.getUTCFullYear() - 9);
+    const res = await register(registration({ birthDate: child.toISOString().slice(0, 10) }));
+    expect(res.statusCode).toBe(422);
+    expect(res.json().error).toMatch(/grown-ups/i);
+  });
+
+  it('rejects an unchecked guardian box rather than recording a false attestation', async () => {
+    const res = await register(registration({ isGuardian: false }));
+    expect(res.statusCode).toBe(400);
+  });
+
+  it('requires a name and a date of birth', async () => {
+    for (const missing of ['fullName', 'birthDate', 'isGuardian']) {
+      const payload = registration();
+      delete (payload as Record<string, unknown>)[missing];
+      const res = await register(payload);
+      expect(res.statusCode, `${missing} should be required`).toBe(400);
+    }
+  });
+
+  it('rejects an implausibly old date of birth', async () => {
+    const res = await register(registration({ birthDate: '1850-01-01' }));
+    expect(res.statusCode).toBe(422);
+  });
+
+  it('still rejects unknown fields', async () => {
+    const res = await register(registration({ role: 'admin' }));
+    expect(res.statusCode).toBe(400);
+  });
+});

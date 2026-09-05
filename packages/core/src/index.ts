@@ -24,6 +24,7 @@ export * from './pedagogy/graphemes.js';
 export * from './pedagogy/decodability.js';
 export * from './pedagogy/teaching.js';
 export * from './pedagogy/lesson.js';
+export * from './pedagogy/pictogram.js';
 export * from './pedagogy/accent.js';
 export * from './pedagogy/miscue.js';
 export * from './pedagogy/correction-ladder.js';

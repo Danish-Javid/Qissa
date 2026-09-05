@@ -141,7 +141,7 @@ export async function earlyRoutes(app: FastifyInstance): Promise<void> {
     try {
       let pending = pendingImages.get(filePath);
       if (pending === undefined) {
-        pending = providers.images.generateImage(stylePrompt(hint));
+        pending = providers.images.generateImage(stylePrompt(hint), hint);
         pendingImages.set(filePath, pending);
         pending.catch(() => undefined).finally(() => pendingImages.delete(filePath));
       }

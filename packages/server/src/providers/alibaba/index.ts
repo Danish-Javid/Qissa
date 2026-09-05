@@ -194,6 +194,8 @@ export class WanxImageGenerator implements IImageGenerator {
     readonly model: string
   ) {}
 
+  // `subject` is for the offline pictogram renderer only; a real model gets
+  // the full styled prompt and needs nothing else.
   async generateImage(hint: string): Promise<ImageResult> {
     const submitted = await dashScopeFetch(this.env, '/api/v1/services/aigc/text2image/image-synthesis', {
       method: 'POST',
