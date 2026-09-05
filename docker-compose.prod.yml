@@ -1,0 +1,70 @@
+# Production stack for qissa.online — app + Postgres + Caddy (TLS).
+#
+#   docker compose -f docker-compose.prod.yml up --build -d
+#
+# Differences from the local docker-compose.yml, all deliberate:
+#
+#  * The app is NOT published to the host. Caddy is the only ingress, so the
+#    app cannot be reached over plain HTTP by IP, which would bypass TLS and
+#    silently break Secure cookies.
+#  * Postgres uses a password from the environment instead of the literal
+#    "qissa" the local file hard-codes for convenience.
+#  * Secrets come from .env.production, which is git-ignored like .env.
+#  * restart: unless-stopped, so a reboot brings the site back without anyone
+#    logging in to the box.
+
+services:
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    ports:
+      - '80:80'
+      - '443:443'
+      - '443:443/udp' # HTTP/3
+    volumes:
+      - ./deploy/Caddyfile:/etc/caddy/Caddyfile:ro
+      # Certificates and Caddy's account key. Losing this volume means
+      # re-issuing certificates and burning Let's Encrypt rate limit.
+      - caddy-data:/data
+      - caddy-config:/config
+    depends_on:
+      - app
+
+  app:
+    build: .
+    restart: unless-stopped
+    env_file:
+      - .env.production
+    environment:
+      DATABASE_URL: postgresql://qissa:${POSTGRES_PASSWORD}@db:5432/qissa?schema=public
+      NODE_ENV: production
+      # Mandatory behind TLS. With this false, the browser would still accept
+      # the cookie, but it would travel without the Secure attribute.
+      COOKIE_SECURE: 'true'
+    volumes:
+      - qissa-data:/srv/qissa/data-runtime
+    depends_on:
+      db:
+        condition: service_healthy
+
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: qissa
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: qissa
+    volumes:
+      - qissa-db:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U qissa -d qissa']
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    # No published port: the database is reachable only from the app.
+
+volumes:
+  qissa-data:
+  qissa-db:
+  caddy-data:
+  caddy-config:
