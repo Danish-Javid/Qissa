@@ -147,7 +147,10 @@ export async function voiceRoutes(app: FastifyInstance): Promise<void> {
     return reply.code(201).send({ stored: true, id: clip.id });
   });
 
-  app.get('/:id', { preHandler: requireAuth(app) }, async (request, reply) => {
+  // Mounted at /audio/:id (this plugin carries no prefix). A bare '/:id'
+  // here would both miss the client's /api/audio/:id call and swallow every
+  // unmatched single-segment GET under /api as a catch-all.
+  app.get('/audio/:id', { preHandler: requireAuth(app) }, async (request, reply) => {
     const params = parseParams(AudioIdParams, request.params, reply);
     if (params === null) return;
 
