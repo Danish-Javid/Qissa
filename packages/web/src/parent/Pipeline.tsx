@@ -55,6 +55,8 @@ export function Pipeline() {
             <Stat label="Vendor spend" value={`$${(metrics.sessions.costMicroUsd / 1e6).toFixed(4)}`} />
             <Stat label="Distress escalations" value={String(metrics.safety.distressEscalations)} />
             <Stat label="Accent catches" value={String(metrics.safety.accentVariantCatches)} />
+            <Stat label="Daily budget / child" value={String(metrics.budget.perChildPerDay)} />
+            <Stat label="Generations withheld" value={String(metrics.budget.generationsWithheld)} />
           </div>
         </section>
       )}

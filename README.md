@@ -134,6 +134,7 @@ refuses to start on a bad value.
 | `AZURE_IMAGE_MODEL` | `FLUX.2-pro` | Foundry Models image deployment |
 | `AUDIO_RETENTION_DAYS` | `30` | Raw child audio deleted after N days (0 = immediate) |
 | `SESSION_CAP_MINUTES` | `15` | Server-enforced session cap |
+| `DAILY_STORY_BUDGET_PER_CHILD` | `40` | Vendor generations per child per rolling 24h; reaching it serves the vetted ladder instead of erroring (`0` = never call the generator) |
 | `SEED_PARENT_EMAIL` | `demo@qissa.app` | Demo account email |
 | `SEED_PARENT_PASSWORD` | `change-me-before-demo` | Demo account password — change before the stage |
 

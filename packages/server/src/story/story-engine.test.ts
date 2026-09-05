@@ -14,13 +14,17 @@ import { checkStory, prefetchStory, serveStory } from './story-engine.js';
 const WORLD_SEED: WorldSeed = { heroName: 'Mina', city: 'Lahore', petName: 'Simi', petKind: 'cat' };
 
 /** In-memory Prisma stand-in: records writes, returns plausible rows. */
-function fakePrisma() {
+function fakePrisma(storiesAlreadyGenerated = 0) {
   const writes: { op: string; args: unknown }[] = [];
   return {
     writes,
     client: {
       auditLog: { create: vi.fn(async ({ data }: { data: unknown }) => (writes.push({ op: 'audit', args: data }), { id: 'a' })) },
-      story: { create: vi.fn(async ({ data }: { data: unknown }) => (writes.push({ op: 'story', args: data }), { id: 'story-1' })) },
+      story: {
+        create: vi.fn(async ({ data }: { data: unknown }) => (writes.push({ op: 'story', args: data }), { id: 'story-1' })),
+        // The budget gate counts rows already generated in the trailing 24h.
+        count: vi.fn(async () => storiesAlreadyGenerated)
+      },
       learnerModel: { upsert: vi.fn(async ({ update }: { update: unknown }) => (writes.push({ op: 'learner', args: update }), {})) }
     } as unknown as PrismaClient
   };
@@ -444,5 +448,100 @@ describe('Story Time (receptive, teach=false)', () => {
     // Receptive: the longer book still never advances the learner model.
     expect(writes.some((w) => w.op === 'learner')).toBe(false);
     expect(result.updatedModel).toEqual(before);
+  });
+});
+
+/**
+ * Per-child daily generation budget (NFR-4.4).
+ *
+ * The property that matters is that exhausting the budget is NOT an outage.
+ * A spend cap that left a four-year-old staring at an error would be worse
+ * than no cap at all, so the gate skips only the PAID rung and drops into the
+ * same vetted ladder used when a vendor is down.
+ */
+describe('daily generation budget', () => {
+  it('generates normally while under budget', async () => {
+    const { client } = fakePrisma(3);
+    const result = await serveStory({
+      prisma: client,
+      providers: bundle(new MockStoryGenerator()),
+      childId: 'child-1',
+      worldSeed: WORLD_SEED,
+      learnerModel: createLearnerModel(),
+      ageYears: 5,
+      dailyStoryBudget: 10
+    });
+    expect(result.source).toBe('generated');
+    expect(result.decisions.some((d) => d.check === 'budget.daily')).toBe(false);
+  });
+
+  it('still serves a story once the budget is spent', async () => {
+    const { client, writes } = fakePrisma(10);
+    const result = await serveStory({
+      prisma: client,
+      providers: bundle(new MockStoryGenerator()),
+      childId: 'child-1',
+      worldSeed: WORLD_SEED,
+      learnerModel: createLearnerModel(),
+      ageYears: 5,
+      dailyStoryBudget: 10
+    });
+
+    // The child reads either way — only the paid rung was skipped.
+    expect(result.source).not.toBe('generated');
+    expect(result.story.pages.length).toBeGreaterThan(0);
+
+    const budgetDecision = result.decisions.find((d) => d.check === 'budget.daily');
+    expect(budgetDecision?.ok).toBe(false);
+    expect(budgetDecision?.detail).toContain('10/10');
+    expect(writes.some((w) => (w.args as { event?: string }).event === 'story.budget-exhausted')).toBe(true);
+  });
+
+  it('never calls the vendor once the budget is spent', async () => {
+    const generate = vi.fn();
+    const { client } = fakePrisma(5);
+    await serveStory({
+      prisma: client,
+      providers: bundle({
+        name: 'spy',
+        model: 'spy',
+        generate
+      } as unknown as ProviderBundle['stories']),
+      childId: 'child-1',
+      worldSeed: WORLD_SEED,
+      learnerModel: createLearnerModel(),
+      ageYears: 5,
+      dailyStoryBudget: 5
+    });
+    expect(generate, 'a spent budget must cost nothing').not.toHaveBeenCalled();
+  });
+
+  it('treats a budget of 0 as "never call the vendor"', async () => {
+    const generate = vi.fn();
+    const { client } = fakePrisma(0);
+    const result = await serveStory({
+      prisma: client,
+      providers: bundle({ name: 'spy', model: 'spy', generate } as unknown as ProviderBundle['stories']),
+      childId: 'child-1',
+      worldSeed: WORLD_SEED,
+      learnerModel: createLearnerModel(),
+      ageYears: 5,
+      dailyStoryBudget: 0
+    });
+    expect(generate).not.toHaveBeenCalled();
+    expect(result.story.pages.length).toBeGreaterThan(0);
+  });
+
+  it('is unlimited when no budget is configured', async () => {
+    const { client } = fakePrisma(9999);
+    const result = await serveStory({
+      prisma: client,
+      providers: bundle(new MockStoryGenerator()),
+      childId: 'child-1',
+      worldSeed: WORLD_SEED,
+      learnerModel: createLearnerModel(),
+      ageYears: 5
+    });
+    expect(result.source).toBe('generated');
   });
 });

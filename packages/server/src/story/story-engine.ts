@@ -63,6 +63,14 @@ export interface ServeStoryInput {
    */
   teach?: boolean;
   /**
+   * Vendor generation budget for this child over the trailing 24 hours
+   * (NFR-4.4). Reaching it skips the PAID rung only — the child still gets a
+   * story from the same vetted ladder used when a vendor is down. Undefined
+   * means unlimited, which is what the existing tests and the mock provider
+   * want; the routes pass env.DAILY_STORY_BUDGET_PER_CHILD.
+   */
+  dailyStoryBudget?: number;
+  /**
    * Override the adaptive (mastery-sized) page count. Story Time is receptive:
    * its length is about ENGAGEMENT — a narrated cartoon that should run ~2
    * minutes — not about what the child can decode, so it asks for a fixed,
@@ -297,7 +305,7 @@ export async function prefetchStory(input: ServeStoryInput): Promise<boolean> {
  * Serve the next story for a child — the full fail-closed pipeline.
  */
 export async function serveStory(input: ServeStoryInput): Promise<ServeStoryResult> {
-  const { prisma, providers, childId, worldSeed, learnerModel, ageYears, teach = true, pageCountOverride } = input;
+  const { prisma, providers, childId, worldSeed, learnerModel, ageYears, teach = true, pageCountOverride, dailyStoryBudget } = input;
   const baseConstraints = buildStoryConstraints(learnerModel, worldSeed, ageYears);
   // Story Time passes a fixed, longer page count so the narrated book runs
   // ~2 minutes; the read-along keeps its adaptive, mastery-scaled length.
@@ -362,12 +370,38 @@ export async function serveStory(input: ServeStoryInput): Promise<ServeStoryResu
     }
   }
 
+  // ---- Budget gate: has this child already spent its day's generation? ---
+  // Counting rows is deliberate over a running counter: the stories table IS
+  // the ledger, so the budget cannot drift from what was actually produced,
+  // and a restart cannot reset it. Trailing 24 hours rather than calendar days
+  // so a child cannot get a second full budget at midnight.
+  let withinBudget = true;
+  if (story === null && dailyStoryBudget !== undefined) {
+    const since = new Date(Date.now() - 24 * 60 * 60 * 1000);
+    const spent = await prisma.story.count({
+      where: { childId, createdAt: { gte: since }, source: 'generated' }
+    });
+    withinBudget = spent < dailyStoryBudget;
+    if (!withinBudget) {
+      decisions.push({
+        check: 'budget.daily',
+        ok: false,
+        detail: `${spent}/${dailyStoryBudget} generated in the last 24h`
+      });
+      await audit(prisma, {
+        event: 'story.budget-exhausted',
+        childId,
+        detail: { spent, budget: dailyStoryBudget }
+      });
+    }
+  }
+
   // ---- Rung 1: the configured generator (Qwen in real mode, mock else) --
   // Skipped when a background prefetch is already running for this child:
   // starting a second generation would double-bill the vendor and still not
   // finish inside the child's grace, so we fall straight to the vetted ladder
   // and let the prefetch warm the cache for next time.
-  if (story === null && !joinedInflight) {
+  if (story === null && !joinedInflight && withinBudget) {
     try {
       const { story: raw, costMicroUsd } = await providers.stories.generate({
         constraints,

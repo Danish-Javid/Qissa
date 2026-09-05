@@ -76,6 +76,11 @@ const EnvSchema = z.object({
   AUDIO_RETENTION_DAYS: z.coerce.number().int().min(0).max(365).default(30),
   // Hard session cap (FR-H.1). Server-enforced; the client cannot extend it.
   SESSION_CAP_MINUTES: z.coerce.number().int().min(1).max(60).default(15),
+  // Vendor generation budget per child per rolling 24h (NFR-4.4). Reaching it
+  // does NOT error: the engine skips the paid rung and serves the same vetted
+  // ladder it uses when a vendor is down, so a child still reads. 0 disables
+  // the generator entirely (useful for a zero-spend rehearsal).
+  DAILY_STORY_BUDGET_PER_CHILD: z.coerce.number().int().min(0).max(500).default(40),
 
   SEED_PARENT_EMAIL: z.string().default('demo@qissa.app'),
   SEED_PARENT_PASSWORD: z.string().default('change-me-before-demo')

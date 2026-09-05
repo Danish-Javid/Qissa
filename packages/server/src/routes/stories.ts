@@ -58,7 +58,7 @@ function chooseImages<T>(settings: unknown, vendor: T): T | MockImageGenerator {
 }
 
 export async function storyRoutes(app: FastifyInstance): Promise<void> {
-  const { prisma, providers } = ctx(app);
+  const { prisma, providers, env } = ctx(app);
   await mkdir(illustrationDir, { recursive: true });
 
   app.post('/prefetch', { preHandler: requireAuth(app) }, async (request, reply) => {
@@ -102,7 +102,8 @@ export async function storyRoutes(app: FastifyInstance): Promise<void> {
         childId: child.id,
         worldSeed: child.worldSeed as unknown as WorldSeed,
         learnerModel: learner.state as unknown as LearnerModel,
-        ageYears: ageInYears(child.birthDate)
+        ageYears: ageInYears(child.birthDate),
+        dailyStoryBudget: env.DAILY_STORY_BUDGET_PER_CHILD
       });
       return reply.code(201).send({
         storyId: result.storyId,
@@ -158,7 +159,8 @@ export async function storyRoutes(app: FastifyInstance): Promise<void> {
         // internally, so an age below the pedagogy band is handled gracefully.
         ageYears,
         teach: false, // receptive — never advance the learner model
-        pageCountOverride: STORY_TIME_PAGES // a longer book, so it runs ~2 min
+        pageCountOverride: STORY_TIME_PAGES, // a longer book, so it runs ~2 min
+        dailyStoryBudget: env.DAILY_STORY_BUDGET_PER_CHILD
       });
       return reply.code(201).send({
         storyId: result.storyId,

@@ -17,13 +17,14 @@ export async function healthRoutes(app: FastifyInstance): Promise<void> {
 }
 
 export async function metricsRoutes(app: FastifyInstance): Promise<void> {
-  const { prisma, providers } = ctx(app);
+  const { prisma, providers, env } = ctx(app);
 
   app.get('/metrics-demo', { preHandler: requireAuth(app) }, async () => {
-    const [accepted, rejected, fallbacks, capped, escalations, accentCatches, sessions] = await Promise.all([
+    const [accepted, rejected, fallbacks, budgetStops, capped, escalations, accentCatches, sessions] = await Promise.all([
       prisma.auditLog.count({ where: { event: 'story.accepted' } }),
       prisma.auditLog.count({ where: { event: { startsWith: 'story.rejected' } } }),
       prisma.auditLog.count({ where: { event: { startsWith: 'story.fallback' } } }),
+      prisma.auditLog.count({ where: { event: 'story.budget-exhausted' } }),
       prisma.auditLog.count({ where: { event: 'session.capped' } }),
       prisma.distressAlert.count({ where: { severity: 'escalate' } }),
       prisma.miscue.count({ where: { accentApplied: true } }),
@@ -47,6 +48,13 @@ export async function metricsRoutes(app: FastifyInstance): Promise<void> {
         fallbacksServed: fallbacks,
         // The headline statistic: the gate rejects rather than risks.
         rejectionRate: storyDecisions > 0 ? rejected / storyDecisions : null
+      },
+      // Spend controls, so "how does this scale?" has a number attached.
+      budget: {
+        perChildPerDay: env.DAILY_STORY_BUDGET_PER_CHILD,
+        // Times the paid rung was skipped because a child had spent its day.
+        // Not an error count: each one still served a vetted story.
+        generationsWithheld: budgetStops
       },
       sessions: {
         recent: sessions.length,

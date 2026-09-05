@@ -157,6 +157,10 @@ export interface MetricsResponse {
     fallbacksServed: number;
     rejectionRate: number | null;
   };
+  budget: {
+    perChildPerDay: number;
+    generationsWithheld: number;
+  };
   sessions: {
     recent: number;
     cappedByServer: number;
