@@ -104,3 +104,39 @@ describe('ladder helpers', () => {
     expect(segmentationOf('ship', graphemesUpTo(4))).toEqual(['/sh/', '/i/', '/p/']);
   });
 });
+
+describe('split digraphs (magic e) are never decodable', () => {
+  // Regression: the parser matched letter SEQUENCES, not sound-spelling
+  // correspondences, so "make" passed at level 3 as m-a-k-e. Split digraphs
+  // (a_e, i_e, o_e, u_e) appear at NO level of the scope, so these words can
+  // never be legitimately decodable -- at any level, for any child.
+  const splitDigraphWords = ['make', 'like', 'hope', 'cute', 'time', 'bone', 'cake', 'ride'];
+
+  for (const level of [3, 6, 8]) {
+    it(`rejects them at level ${level}`, () => {
+      for (const word of splitDigraphWords) {
+        expect(isWordDecodable(word, ctx(level)), `"${word}" must not be decodable at level ${level}`).toBe(false);
+      }
+    });
+  }
+
+  it('still accepts words where a final e belongs to a taught vowel grapheme', () => {
+    // The guard is per-candidate, so backtracking finds the longer grapheme:
+    // see -> s + ee, toe -> t + oe, cue -> c + ue, cure -> c + ure.
+    expect(parseGraphemes('see', graphemesUpTo(5))).toEqual(['s', 'ee']);
+    expect(parseGraphemes('toe', graphemesUpTo(6))).toEqual(['t', 'oe']);
+    expect(parseGraphemes('cue', graphemesUpTo(6))).toEqual(['c', 'ue']);
+    expect(parseGraphemes('cure', graphemesUpTo(6))).toEqual(['c', 'ure']);
+  });
+
+  it('leaves two-letter words alone — the e is the vowel, not a magic e', () => {
+    // "me"/"be"/"he" are taught as tricky words, but the parser must not
+    // reject them on the silent-e rule either.
+    expect(parseGraphemes('me', graphemesUpTo(2))).toEqual(['m', 'e']);
+  });
+
+  it('keeps tricky words readable regardless of their spelling', () => {
+    expect(isWordDecodable('the', ctx(2))).toBe(true);
+    expect(isWordDecodable('there', ctx(6))).toBe(true);
+  });
+});

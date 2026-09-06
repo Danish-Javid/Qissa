@@ -42,12 +42,12 @@
       "sentenceBits": ["said", "are", "all", "down", "look", "now", "not", "but"]
     },
     "6": {
-      "nouns": ["day", "toe", "paw", "ear", "hair", "fern", "soup", "house", "mouse", "mouth", "picture", "tray", "hay", "cue", "glue", "lure", "goat", "soap", "flour"],
+      "nouns": ["day", "toe", "paw", "ear", "hair", "fern", "soup", "town", "cow", "mouth", "picture", "tray", "hay", "cue", "glue", "lure", "goat", "soap", "flour"],
       "verbs": ["hear", "play", "wear", "pour", "grow", "chew", "cure"],
       "names": ["Bea", "Ray"],
-      "settings": ["bay", "hay", "house"],
+      "settings": ["bay", "hay", "farm"],
       "adjectives": ["new", "old", "fair", "slow", "blue", "pure"],
-      "sentenceBits": ["they", "there", "once", "out", "here", "will", "said"]
+      "sentenceBits": ["they", "there", "once", "out", "now", "will", "said"]
     },
     "7": {
       "nouns": ["flag", "crab", "drum", "swing", "lamp", "hand", "tent", "gift", "stop", "frog", "trap", "snow", "milk", "sand", "plum", "black", "street", "pond", "clod", "brick", "frost", "grass", "train", "spot", "sled", "flower", "glow"],

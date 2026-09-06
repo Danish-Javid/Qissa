@@ -131,3 +131,47 @@ describe('adaptive length (FR-B.9)', () => {
     expect(pageCountForLevel(4)).toBeLessThan(20);
   });
 });
+
+describe('applyWordOutcomes accumulation', () => {
+  const outcome = (expected: string, graphemes: string[]): WordOutcome => ({
+    expected,
+    index: 0,
+    outcome: 'correct',
+    graphemes,
+    ladderStep: 0
+  });
+
+  // Regression: statFor() read the ORIGINAL model rather than the accumulating
+  // record, so within one batch each grapheme kept only its LAST observation.
+  // Reading "sat sit" credited s and t once, with a single distinct word --
+  // and progression needs 8/10 across 3+ DISTINCT words, so the graphemes a
+  // child practised most were the ones that could never reach mastery.
+  it('accumulates every observation of a repeated grapheme in one batch', () => {
+    const after = applyWordOutcomes(createLearnerModel(), [
+      outcome('sat', ['s', 'a', 't']),
+      outcome('sit', ['s', 'i', 't'])
+    ]);
+
+    for (const g of ['s', 't']) {
+      const stat = after.graphemeStats[g];
+      expect(stat?.exposures, `${g} exposures`).toBe(2);
+      expect(stat?.correct, `${g} correct`).toBe(2);
+      expect(stat?.distinctWords, `${g} distinct words`).toEqual(['sat', 'sit']);
+    }
+    // Graphemes appearing once are unaffected.
+    expect(after.graphemeStats.a?.exposures).toBe(1);
+    expect(after.graphemeStats.i?.distinctWords).toEqual(['sit']);
+  });
+
+  it('accumulates across three words and mixed outcomes', () => {
+    const after = applyWordOutcomes(createLearnerModel(), [
+      outcome('sat', ['s', 'a', 't']),
+      outcome('sit', ['s', 'i', 't']),
+      { expected: 'sip', index: 2, outcome: 'substitution', graphemes: ['s', 'i', 'p'], ladderStep: 1 }
+    ]);
+    const s = after.graphemeStats.s;
+    expect(s?.exposures).toBe(3);
+    expect(s?.correct).toBe(2);
+    expect(s?.distinctWords).toEqual(['sat', 'sit', 'sip']);
+  });
+});

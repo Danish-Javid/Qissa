@@ -52,9 +52,18 @@ export function createLearnerModel(startLevel = 1, at = new Date()): LearnerMode
 }
 
 /** Ensure a stat row exists (forward-compat: unknown graphemes get rows). */
-function statFor(model: LearnerModel, grapheme: string): GraphemeStat {
+/**
+ * The current stat for a grapheme, or a fresh one.
+ *
+ * Takes the STATS RECORD, not the model, and that is the whole point: callers
+ * accumulate into a working record across many observations, and reading from
+ * the original model instead would make every write start from the same
+ * pre-batch value — silently discarding all but the last. See the note on
+ * applyWordOutcomes.
+ */
+function statFor(stats: Record<string, GraphemeStat>, grapheme: string): GraphemeStat {
   return (
-    model.graphemeStats[grapheme] ?? {
+    stats[grapheme] ?? {
       grapheme,
       exposures: 0,
       correct: 0,
@@ -82,7 +91,13 @@ export function applyWordOutcomes(model: LearnerModel, outcomes: WordOutcome[], 
     const wasCorrect = o.outcome === 'correct' || o.outcome === 'self-correction';
 
     for (const g of o.graphemes) {
-      let stat = statFor(model, g);
+      // Read from the ACCUMULATOR, not from `model`. Reading the original
+      // model here meant a line like "sat sit" recorded `s` and `t` once
+      // each — the second observation started from the pre-batch stat and
+      // overwrote the first, losing both the exposure and the distinct word.
+      // Since progression needs 8/10 across 3+ DISTINCT words, that made
+      // mastery unreachable for exactly the graphemes a child practised most.
+      let stat = statFor(stats, g);
       stat = recordOutcome(stat, o.expected, wasCorrect, at.toISOString());
       stat = { ...stat, nextReviewDue: scheduleNextReview(stat, at) };
       stats[g] = stat;

@@ -33,7 +33,7 @@ export const PICTOGRAMS: Record<string, string> = {
   // animals
   ant: '🐜', bird: '🐦', cat: '🐱', cow: '🐄', crab: '🦀', dog: '🐶', duck: '🦆',
   fox: '🦊', frog: '🐸', gnat: '🦟', goat: '🐐', hen: '🐔', lamb: '🐑',
-  moth: '🦋', mouse: '🐭', wasp: '🐝', web: '🕸️',
+  moth: '🦋', wasp: '🐝', web: '🕸️',
   // food and drink
   apple: '🍎', banana: '🍌', bread: '🍞', corn: '🌽', flour: '🌾', gum: '🍬',
   jam: '🍓', milk: '🥛', nut: '🥜', plum: '🫐', soup: '🍲',
@@ -50,7 +50,7 @@ export const PICTOGRAMS: Record<string, string> = {
   lip: '👄', man: '🧑', mouth: '👄', paw: '🐾', tail: '🐕', toe: '🦶',
   wrist: '⌚',
   // places and buildings
-  den: '🏕️', dock: '⚓', farm: '🚜', house: '🏠', hut: '🛖', pond: '🏞️',
+  den: '🏕️', dock: '⚓', farm: '🚜', hut: '🛖', pond: '🏞️',
   road: '🛣️', shop: '🏪', street: '🏘️', town: '🏙️',
   // nature and weather
   day: '☀️', fern: '🌿', flower: '🌸', frost: '❄️', grass: '🌱', hay: '🌾',

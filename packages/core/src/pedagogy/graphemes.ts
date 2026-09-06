@@ -19,9 +19,16 @@
  * blends (bl, st, nd…) are the exception: they are adjacent SEPARATE sounds,
  * so "ant" stays readable at level 1 despite `nt` being a level-7 unit.
  *
- * Known limitation (documented, deliberate): split digraphs ("make" = m-a-k-e
- * with magic-e) are not modelled. Word banks and cached stories avoid such
- * spellings until they can be represented properly.
+ * Split digraphs / magic-e ("make", "like", "hope") are NOT in the scope at
+ * any level, so they are never taught and such words can never be decodable.
+ * The parser enforces that rather than trusting content to avoid them: a
+ * trailing standalone `e` is rejected outright (see isSilentFinalE).
+ *
+ * That used to be a documented limitation mitigated by "word banks avoid such
+ * spellings" — which protects hand-authored content but NOT the generator,
+ * and the generator is the entire reason the gate exists. "make" passed as
+ * m-a-k-e at level 3, so a child taught only single letters could be asked to
+ * sound out a word whose vowel she has never met.
  */
 import phonicsScopeJson from '../data/phonics-scope.json' with { type: 'json' };
 
@@ -81,6 +88,27 @@ function gateUnsplittable(): Set<string> {
   return gateCache;
 }
 
+/**
+ * Would accepting a bare `e` here be the silent e of a split digraph?
+ *
+ * True when the `e` is the LAST letter of a word of three letters or more.
+ * English has essentially no such word where a final lone `e` says short /e/;
+ * it is the magic-e of a split digraph ("make", "like", "hope", "cute"),
+ * which this curriculum never teaches — so the word is not decodable.
+ *
+ * Deliberately checked per-candidate rather than after a full parse, so
+ * backtracking can still find a legitimate reading: "see" parses as s + `ee`,
+ * "toe" as t + `oe`, "cue" as c + `ue`, "cure" as c + `ure`, because those
+ * longer graphemes are tried first and consume the `e`. Only a word with no
+ * such alternative — where the `e` can only stand alone — is rejected.
+ *
+ * Two-letter words ("me", "be", "he") are left alone: the `e` is the vowel,
+ * not a magic-e, and they are taught as tricky words anyway.
+ */
+function isSilentFinalE(w: string, pos: number, len: number): boolean {
+  return len === 1 && w[pos] === 'e' && pos === w.length - 1 && w.length >= 3;
+}
+
 /** Does the letter at `pos` start an unsplittable multi-letter grapheme? */
 function startsUnsplittableUnit(w: string, pos: number): boolean {
   const units = gateUnsplittable();
@@ -112,6 +140,9 @@ export function parseGraphemes(word: string, taughtGraphemes: string[]): string[
       // Curriculum gate: a single letter may not stand in for a digraph the
       // child has not been taught ("ship" must not sneak through as s-h-i-p).
       if (len === 1 && startsUnsplittableUnit(w, pos)) continue;
+      // Nor may a trailing lone `e` stand in for a split digraph nobody has
+      // been taught ("make" must not sneak through as m-a-k-e).
+      if (isSilentFinalE(w, pos, len)) continue;
       if (taught.has(candidate)) {
         result.push(candidate);
         if (search(pos + len)) return true;

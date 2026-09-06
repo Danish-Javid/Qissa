@@ -39,5 +39,10 @@ diag-clip.wav
 flux-test.png
 illustration-styled.png
 
+# `npm run review` output — a frank external critique of our own product,
+# written to the repo root for convenience. This repository is PUBLIC; a
+# ranked list of our weaknesses is not something to publish by accident.
+review-output.md
+
 # Prisma — generated client is derived from schema.prisma, never committed
 packages/server/prisma/generated/
