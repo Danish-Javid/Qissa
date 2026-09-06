@@ -13,7 +13,7 @@ import path from 'node:path';
 import { z } from 'zod';
 import type { FastifyInstance } from 'fastify';
 import { ageInYears, ctx, rawAgeInYears } from '../context.js';
-import { stylePrompt } from '../providers/art-style.js';
+import { ART_CACHE_VERSION, stylePrompt } from '../providers/art-style.js';
 import { MockImageGenerator } from '../providers/mock/index.js';
 import type { ImageResult } from '../providers/interfaces.js';
 import { prefetchStory, serveStory } from '../story/story-engine.js';
@@ -201,10 +201,18 @@ export async function storyRoutes(app: FastifyInstance): Promise<void> {
     });
     if (story === null || story.child.parentId !== request.auth.parent.id) return denyNotFound(reply);
 
-    const content = story.content as unknown as { pages?: Array<{ illustrationHint?: string }> };
+    const content = story.content as unknown as {
+      pages?: Array<{ text?: string; illustrationHint?: string }>;
+    };
     const page = content.pages?.[params.page];
     if (page === undefined) return denyNotFound(reply);
     const hint = page.illustrationHint ?? 'a warm storybook scene';
+    // The page's own SENTENCE is the subject, not the illustration hint. The
+    // hint is prose that opens with art boilerplate ("warm flat storybook
+    // scene: ..."), whereas the sentence is nothing but curriculum words --
+    // which is exactly the vocabulary the pictogram table is built from, and
+    // is also what the picture is supposed to depict for the child.
+    const subject = page.text ?? hint;
 
     // Low-bandwidth mode: draw the deterministic house-style placeholder
     // locally instead of calling the image vendor. On a metered Pakistani
@@ -217,7 +225,7 @@ export async function storyRoutes(app: FastifyInstance): Promise<void> {
 
     const ext = lowBandwidth || providers.mode === 'mock' ? 'svg' : 'png';
     const suffix = lowBandwidth ? '-lite' : '';
-    const filePath = path.join(illustrationDir, `${story.id}-${params.page}${suffix}.${ext}`);
+    const filePath = path.join(illustrationDir, `${ART_CACHE_VERSION}-${story.id}-${params.page}${suffix}.${ext}`);
     try {
       const cached = await readFile(filePath);
       return reply.type(ext === 'svg' ? 'image/svg+xml' : 'image/png').send(cached);
@@ -230,9 +238,7 @@ export async function storyRoutes(app: FastifyInstance): Promise<void> {
       if (pending === undefined) {
         // The scene hint is merged with the house art direction (researched
         // kid-loved style) so every provider draws in the same warm world.
-        // The page's own scene line is the subject — NOT the styled prompt,
-        // whose house-style block carries its own concrete words.
-        pending = images.generateImage(stylePrompt(hint), hint);
+        pending = images.generateImage(stylePrompt(hint), subject);
         pendingImages.set(filePath, pending);
         pending.catch(() => undefined).finally(() => pendingImages.delete(filePath));
       }
@@ -275,7 +281,7 @@ export async function storyRoutes(app: FastifyInstance): Promise<void> {
 
     const ext = lowBandwidth || providers.mode === 'mock' ? 'svg' : 'png';
     const suffix = lowBandwidth ? '-gift-lite' : '-gift';
-    const filePath = path.join(illustrationDir, `${story.id}${suffix}.${ext}`);
+    const filePath = path.join(illustrationDir, `${ART_CACHE_VERSION}-${story.id}${suffix}.${ext}`);
     try {
       const cached = await readFile(filePath);
       return reply.type(ext === 'svg' ? 'image/svg+xml' : 'image/png').send(cached);

@@ -21,7 +21,7 @@ import { z } from 'zod';
 import type { FastifyInstance } from 'fastify';
 import { ctx } from '../context.js';
 import { buildDeck, EARLY_ART_HINTS, WORD_CARDS, VIGNETTES, type EarlyHistory } from '../early/catalog.js';
-import { stylePrompt } from '../providers/art-style.js';
+import { ART_CACHE_VERSION, stylePrompt } from '../providers/art-style.js';
 import type { ImageResult } from '../providers/interfaces.js';
 import { audit } from '../safety/audit.js';
 import { denyNotFound, ownedChild, requireAuth } from './guards.js';
@@ -130,7 +130,7 @@ export async function earlyRoutes(app: FastifyInstance): Promise<void> {
     if (hint === undefined) return denyNotFound(reply);
 
     const ext = providers.mode === 'mock' ? 'svg' : 'png';
-    const filePath = path.join(earlyArtDir, `${params.id}.${ext}`);
+    const filePath = path.join(earlyArtDir, `${ART_CACHE_VERSION}-${params.id}.${ext}`);
     try {
       const cached = await readFile(filePath);
       return reply.type(ext === 'svg' ? 'image/svg+xml' : 'image/png').send(cached);
@@ -141,7 +141,13 @@ export async function earlyRoutes(app: FastifyInstance): Promise<void> {
     try {
       let pending = pendingImages.get(filePath);
       if (pending === undefined) {
-        pending = providers.images.generateImage(stylePrompt(hint), hint);
+        // For a word card the id IS the word ("word-apple"), so pass that
+        // rather than the art prose. The prose is written for an image model
+        // and often never names the thing -- the dog card reads "a happy
+        // puppy wagging its tail", which the offline renderer matched on
+        // "tail". It happened to draw a dog; it just as easily would not have.
+        const subject = params.id.startsWith('word-') ? params.id.slice('word-'.length) : hint;
+        pending = providers.images.generateImage(stylePrompt(hint), subject);
         pendingImages.set(filePath, pending);
         pending.catch(() => undefined).finally(() => pendingImages.delete(filePath));
       }

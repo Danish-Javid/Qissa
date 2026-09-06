@@ -25,6 +25,28 @@ describe('pictogramFor', () => {
     expect(pictogramFor('  Frog  ').glyph).toBe('🐸');
   });
 
+  it('does not let art-prompt boilerplate hijack the subject', () => {
+    // Verbatim from a real story page. Every generated hint opens with this
+    // phrasing, so while "warm" was in the table EVERY page in every story
+    // rendered the same sun glyph -- the original bug, in a second disguise.
+    const hint = 'warm flat storybook scene: Ayesha the child standing at a pit, curious and smiling, soft colors';
+    expect(pictogramFor(hint).word).not.toBe('warm');
+    expect(pictogramFor(hint).word).toBe('pit');
+  });
+
+  it('gives a story’s pages different pictures from their own sentences', () => {
+    // The route passes page.text (curriculum words only), not the hint prose.
+    const pages = [
+      'Ayesha is at a pit. Ayesha spins a nap.',
+      'a nap is in a pit. Ayesha spins a nap.',
+      'the cat sat on a mat.',
+      'a big bus is on the road.'
+    ];
+    const glyphs = pages.map((t) => pictogramFor(t).glyph);
+    expect(new Set(glyphs).size, `all pages drew the same thing: ${glyphs.join(' ')}`).toBeGreaterThan(1);
+    expect(pictogramFor('a big bus is on the road.').word).toBe('bus');
+  });
+
   it('takes the subject from the caller’s sentence, not the appended style block', () => {
     // This is the exact shape of a real request. Matching from the END would
     // land on "warm" (or "small"/"picture") inside ART_DIRECTION and give every
