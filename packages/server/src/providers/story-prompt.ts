@@ -99,7 +99,7 @@ function buildDecodablePrompt(request: StoryGenerationRequest): string {
   // new ones. Listing only the new ones told the model it had a smaller
   // vocabulary than the validator would actually accept, so it avoided words
   // it was allowed to use and failed density checks it could have passed.
-  const usableTrickyWords = [...new Set([...request.taughtTrickyWords, ...c.allowedTrickyWords])];
+  const lex = request.lexicon;
   return [
     `Write a story for a ${c.ageYears}-year-old child named ${c.childName}.`,
     `Theme: ${c.theme}. Exactly ${c.pageCount} pages.`,
@@ -108,8 +108,23 @@ function buildDecodablePrompt(request: StoryGenerationRequest): string {
     `Tell ONE tiny, coherent story across the ${c.pageCount} pages about the hero ${c.worldSeed.heroName}. Keep the SAME characters and the SAME object across every page so a 4-year-old can follow what is happening. Use a simple arc: page 1 sets the scene, the middle shows a small problem or wish and an attempt, and the last page resolves it warmly and names a feeling. Every page must clearly continue the SAME moment — never a fresh unrelated sentence.`,
     '',
     'STRICT vocabulary rule for the decodable text only:',
-    `Every word in "text", the title, the choice options and the consequences must be decodable using ONLY these taught phonics units: ${c.allowedGraphemes.join(', ')} plus the NEW unit "${c.targetGrapheme}".`,
-    `You may also freely use these whole words: ${usableTrickyWords.join(', ') || 'none'}. The ONLY proper names allowed in text are: ${names}.`,
+    // Words, not rules. Deriving which words a grapheme set spells is a task
+    // models fail at, and they fail silently -- "Ayla s." passes a shape check.
+    lex === undefined
+      ? `Every word in "text", the title, the choice options and the consequences must be decodable using ONLY these taught phonics units: ${c.allowedGraphemes.join(', ')} plus the NEW unit "${c.targetGrapheme}".`
+      : [
+          'Build the decodable text from THIS vocabulary. These are the only words the child can read:',
+          lex.nouns.length > 0 ? `  nouns: ${lex.nouns.join(', ')}` : '',
+          lex.verbs.length > 0 ? `  verbs: ${lex.verbs.join(', ')}` : '',
+          lex.adjectives.length > 0 ? `  describing words: ${lex.adjectives.join(', ')}` : '',
+          lex.settings.length > 0 ? `  places: ${lex.settings.join(', ')}` : '',
+          lex.connectives.length > 0 ? `  small words: ${lex.connectives.join(', ')}` : '',
+          lex.wholeWords.length > 0 ? `  known whole words: ${lex.wholeWords.join(', ')}` : '',
+          `You may coin another word ONLY if it is spelled with these units: ${c.allowedGraphemes.join(', ')} plus "${c.targetGrapheme}".`
+        ]
+          .filter((line) => line !== '')
+          .join('\n'),
+    `The ONLY proper names allowed in text are: ${names}.`,
     `The unit "${c.targetGrapheme}" must appear at least ${TARGET_GRAPHEME_MIN_OCCURRENCES} times, spread across as MANY DIFFERENT words as you can rather than repeating one word.`,
     `Review units: ${c.reviewGraphemes.join(', ') || 'none'}. EACH must appear at least ${REVIEW_GRAPHEME_MIN_OCCURRENCES} times, again in different words where possible.`,
     `The city "${c.worldSeed.city}" is background for illustrations ONLY — never write the city name or any place name in the title, pages, choice or offline task.`,

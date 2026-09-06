@@ -18,7 +18,7 @@
  *  - Audio privacy: recognizer implementations MUST be configured to opt out
  *    of vendor training data (asserted in the Alibaba provider config).
  */
-import type { StoryChoice, StoryConstraints, StoryPage } from '@qissa/core';
+import type { LegalLexicon, StoryChoice, StoryConstraints, StoryPage } from '@qissa/core';
 
 /** The raw story a generator owes us, before the safety pipeline touches it.
  *  Provenance, level and theme are stamped by the engine, not the vendor. */
@@ -50,6 +50,18 @@ export interface StoryGenerationRequest {
    * like "Mina s". A story nobody reads should be a good story.
    */
   decodable: boolean;
+  /**
+   * The words this child may actually be shown, grouped by sentence role.
+   *
+   * Only meaningful when `decodable` is true. Handing a generator the taught
+   * GRAPHEMES and expecting it to derive the vocabulary is what produced pages
+   * reading "Ayla s." — the model had to do phonics before it could write, and
+   * did neither well. Given the words, it writes sentences.
+   *
+   * Advisory, not authoritative: the gate still re-validates every word, so a
+   * generator that coins another legal word is welcome to.
+   */
+  lexicon?: LegalLexicon;
   /** Optional per-call ceiling in milliseconds. The engine passes a SHORT
    *  budget on the child-facing synchronous path (fail fast to the ladder,
    *  never a spinner) and leaves the BACKGROUND prefetch on the provider's

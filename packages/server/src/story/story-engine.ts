@@ -26,6 +26,10 @@ import {
   teachTrickyWord,
   tokenize,
   validateText,
+  assessFeasibility,
+  buildLexicon,
+  type FeasibilityReport,
+  type LegalLexicon,
   TARGET_GRAPHEME_MIN_OCCURRENCES,
   REVIEW_GRAPHEME_MIN_OCCURRENCES,
   type DecodabilityContext,
@@ -273,6 +277,34 @@ export function checkStory(
   return decisions;
 }
 
+
+/**
+ * Compile the child's legal vocabulary and drop any part of the brief it
+ * cannot support.
+ *
+ * A generator asked for something impossible does not refuse — it produces
+ * something shaped correctly and meaningless ("Ayla s."), which then burns a
+ * paid call and a gate rejection on its way to the fallback. Checking first is
+ * cheap: the vocabulary is a data lookup.
+ *
+ * Only provably-unreachable demands are removed. A review sound with no legal
+ * carrier word cannot appear in any valid story, so asking for it guarantees
+ * failure; everything else is left for the gate to judge on the output.
+ */
+function planGeneration(
+  constraints: StoryConstraints,
+  ctx: DecodabilityContext,
+  level: number
+): { constraints: StoryConstraints; lexicon: LegalLexicon; feasibility: FeasibilityReport } {
+  const lexicon = buildLexicon(level, ctx);
+  const feasibility = assessFeasibility(constraints.targetGrapheme, constraints.reviewGraphemes, lexicon);
+  return {
+    constraints: feasibility.ok ? constraints : { ...constraints, reviewGraphemes: feasibility.achievableReviews },
+    lexicon,
+    feasibility
+  };
+}
+
 /** First hand-written cached story that passes every gate for this child. */
 function findValidCachedStory(constraints: StoryConstraints, ctx: DecodabilityContext): Story | null {
   for (const candidate of cachedStories) {
@@ -319,14 +351,17 @@ export async function prefetchStory(input: ServeStoryInput): Promise<boolean> {
     try {
       const constraints = buildStoryConstraints(learnerModel, worldSeed, ageYears);
       const ctx = validationContext(learnerModel, constraints);
+      const level = generationLevel(learnerModel, constraints.targetGrapheme);
+      const plan = planGeneration(constraints, ctx, level);
       const { story: raw } = await providers.stories.generate({
-        constraints,
-        level: generationLevel(learnerModel, constraints.targetGrapheme),
+        constraints: plan.constraints,
+        level,
         promptVersion: PROMPT_VERSION,
         taughtTrickyWords: learnerModel.taughtTrickyWords,
-        decodable
+        decodable,
+        lexicon: decodable ? plan.lexicon : undefined
       });
-      if (!checkStory(raw, constraints, ctx, { decodable }).every((d) => d.ok)) return false;
+      if (!checkStory(raw, plan.constraints, ctx, { decodable }).every((d) => d.ok)) return false;
       warmCache.set(childId, { candidate: raw, expiresAt: Date.now() + WARM_TTL_MS });
       return true;
     } catch {
@@ -360,7 +395,14 @@ export async function serveStory(input: ServeStoryInput): Promise<ServeStoryResu
   const constraints =
     pageCountOverride !== undefined ? { ...baseConstraints, pageCount: pageCountOverride } : baseConstraints;
   const ctx = validationContext(learnerModel, constraints);
-  const decisions: PipelineDecision[] = [];
+  const generationLevelForStory = generationLevel(learnerModel, constraints.targetGrapheme);
+  // Compile the child's real vocabulary and trim any demand it cannot meet,
+  // BEFORE spending a vendor call on an impossible brief.
+  const plan = planGeneration(constraints, ctx, generationLevelForStory);
+  const planned = plan.constraints;
+  const decisions: PipelineDecision[] = [
+    { check: 'feasibility', ok: plan.feasibility.ok, detail: plan.feasibility.summary }
+  ];
 
   let story: Story | null = null;
   let source: StorySource = 'generated';
@@ -389,7 +431,7 @@ export async function serveStory(input: ServeStoryInput): Promise<ServeStoryResu
   }
   if (warm !== undefined) {
     if (warm.expiresAt > Date.now()) {
-      const checks = checkStory(warm.candidate, constraints, ctx, { decodable });
+      const checks = checkStory(warm.candidate, planned, ctx, { decodable });
       decisions.push(...checks.map((d) => ({ ...d, check: `warm-cache.${d.check}` })));
       if (checks.every((d) => d.ok)) {
         story = {
@@ -452,15 +494,16 @@ export async function serveStory(input: ServeStoryInput): Promise<ServeStoryResu
   if (story === null && !joinedInflight && withinBudget) {
     try {
       const { story: raw, costMicroUsd } = await providers.stories.generate({
-        constraints,
-        level: generationLevel(learnerModel, constraints.targetGrapheme),
+        constraints: planned,
+        level: generationLevelForStory,
         promptVersion: PROMPT_VERSION,
         taughtTrickyWords: learnerModel.taughtTrickyWords,
         decodable,
+        lexicon: decodable ? plan.lexicon : undefined,
         // Child-facing: fail fast to the ladder rather than spin for 30s+.
         budgetMs: SERVE_GRACE_MS
       });
-      const checks = checkStory(raw, constraints, ctx, { decodable });
+      const checks = checkStory(raw, planned, ctx, { decodable });
       decisions.push(...checks.map((d) => ({ ...d, check: `generator.${d.check}` })));
 
       if (checks.every((d) => d.ok)) {
@@ -499,7 +542,7 @@ export async function serveStory(input: ServeStoryInput): Promise<ServeStoryResu
 
   // ---- Rung 2: hand-written cached story that passes every gate --------
   if (story === null) {
-    const cached = findValidCachedStory(constraints, ctx);
+    const cached = findValidCachedStory(planned, ctx);
     if (cached !== null) {
       story = cached;
       source = 'cache';
@@ -513,16 +556,17 @@ export async function serveStory(input: ServeStoryInput): Promise<ServeStoryResu
     try {
       const fallback = new MockStoryGenerator();
       const { story: raw } = await fallback.generate({
-        constraints,
+        constraints: planned,
         // Same generation-level rule as rung 1: a level-3 child's story
         // teaching "ch" draws carrier words from the level-4 bank, where
         // they live. The child's own level has none (503 in the wild).
-        level: generationLevel(learnerModel, constraints.targetGrapheme),
+        level: generationLevelForStory,
         promptVersion: PROMPT_VERSION,
         taughtTrickyWords: learnerModel.taughtTrickyWords,
-        decodable
+        decodable,
+        lexicon: decodable ? plan.lexicon : undefined
       });
-      const checks = checkStory(raw, constraints, ctx, { decodable }); // paranoia: re-check
+      const checks = checkStory(raw, planned, ctx, { decodable }); // paranoia: re-check
       if (!checks.every((d) => d.ok)) throw new Error('deterministic fallback failed its own checks');
       story = {
         ...raw,
@@ -555,9 +599,9 @@ export async function serveStory(input: ServeStoryInput): Promise<ServeStoryResu
         generator: story.provenance.generator,
         decisions,
         constraints: {
-          targetGrapheme: constraints.targetGrapheme,
-          reviewGraphemes: constraints.reviewGraphemes,
-          theme: constraints.theme
+          targetGrapheme: planned.targetGrapheme,
+          reviewGraphemes: planned.reviewGraphemes,
+          theme: planned.theme
         }
       } as unknown as Prisma.InputJsonValue
     }

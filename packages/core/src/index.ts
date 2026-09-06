@@ -22,6 +22,7 @@ export * from './data/index.js';
 // Pedagogy engines (NFR-8.4: deterministic, never model discretion)
 export * from './pedagogy/graphemes.js';
 export * from './pedagogy/decodability.js';
+export * from './pedagogy/lexicon.js';
 export * from './pedagogy/teaching.js';
 export * from './pedagogy/lesson.js';
 export * from './pedagogy/pictogram.js';
