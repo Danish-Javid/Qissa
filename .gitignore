@@ -13,8 +13,18 @@ coverage/
 
 # Runtime data: audio clips, generated illustrations, SQLite scratch files.
 # Audio retention is enforced server-side; nothing should ever live in git.
-# Anchored to the repo root: packages/core/src/data is the curriculum, not runtime.
+#
+# Both roots are listed because the server resolves its cache dirs from the
+# CURRENT WORKING DIRECTORY: `docker compose` runs from the repo root (/data),
+# while `npm run dev -w @qissa/server` runs from the workspace
+# (packages/server/data). Only the first was ignored, so a local dev run left
+# real child audio clips sitting untracked in a PUBLIC repository, one
+# `git add -A` away from being published.
+#
+# Anchored, not bare: `data/` would also swallow packages/core/src/data, which
+# is the phonics curriculum and must stay committed.
 /data/
+/packages/server/data/
 data-runtime/
 *.log
 

@@ -10,7 +10,7 @@
  * live state is gone and the route answers 404 — the client resumes with a
  * fresh session, and the learner model never sees a half-folded line.
  */
-import type { LearnerModel, Story, WorldSeed } from '@qissa/core';
+import { parseChildSettings, type LearnerModel, type Story, type WorldSeed } from '@qissa/core';
 import { z } from 'zod';
 import type { FastifyInstance } from 'fastify';
 import { ageInYears, ctx } from '../context.js';
@@ -93,7 +93,11 @@ export async function sessionRoutes(app: FastifyInstance): Promise<void> {
       taughtGraphemes: (learner.state as unknown as LearnerModel).taughtGraphemes,
       taughtTrickyWords: (learner.state as unknown as LearnerModel).taughtTrickyWords,
       learnerModel: learner.state as unknown as LearnerModel,
-      providerMode: env.PROVIDER_MODE
+      providerMode: env.PROVIDER_MODE,
+      // The parent's per-child cap (FR-G.4). The orchestrator clamps it to
+      // SESSION_CAP_MINUTES, so this can only ever shorten the session —
+      // which is the only direction a parental control should move a cap.
+      capMinutes: parseChildSettings(child.settings).sessionCapMinutes
     });
 
     return reply.code(201).send({

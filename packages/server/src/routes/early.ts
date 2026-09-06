@@ -28,7 +28,10 @@ import { denyNotFound, ownedChild, requireAuth } from './guards.js';
 import { parseBody, parseParams } from './validate.js';
 
 const SessionBody = z.object({ childId: z.string().min(1).max(64) }).strict();
-const ArtParams = z.object({ id: z.string().min(1).max(64) }).strict();
+/** Art ids are catalog keys, and the catalog only ever mints two shapes:
+ *  `word-<card id>` and `vig-<vignette id>`. Pinning the shape here means a
+ *  key that could never be in the catalog is rejected before any lookup. */
+const ArtParams = z.object({ id: z.string().regex(/^(?:word|vig)-[a-z0-9-]{1,56}$/) }).strict();
 const WordMetSchema = z
   .object({ childId: z.string().min(1).max(64), cardId: z.enum(WORD_CARDS.map((c) => c.id) as [string, ...string[]]) })
   .strict();
@@ -126,8 +129,14 @@ export async function earlyRoutes(app: FastifyInstance): Promise<void> {
     const params = parseParams(ArtParams, request.params, reply);
     if (params === null) return;
 
-    const hint = EARLY_ART_HINTS[params.id];
-    if (hint === undefined) return denyNotFound(reply);
+    // Object.hasOwn, not `=== undefined`: EARLY_ART_HINTS is built with
+    // Object.fromEntries, so it inherits Object.prototype and a lookup of
+    // "constructor" / "__proto__" / "toString" returns something defined.
+    // The bare undefined check therefore let those keys through to a PAID
+    // vendor generation with a non-string prompt. An own-property test is the
+    // only lookup that means what this guard reads as.
+    if (!Object.hasOwn(EARLY_ART_HINTS, params.id)) return denyNotFound(reply);
+    const hint = EARLY_ART_HINTS[params.id] as string;
 
     const ext = providers.mode === 'mock' ? 'svg' : 'png';
     const filePath = path.join(earlyArtDir, `${ART_CACHE_VERSION}-${params.id}.${ext}`);

@@ -97,11 +97,20 @@ export interface StartSessionInput {
   taughtTrickyWords: string[];
   learnerModel: LearnerModel;
   providerMode: ProviderBundle['mode'];
+  /**
+   * Parent-set cap for THIS child, in minutes (FR-G.4). Omitted = the server
+   * default. It can only ever SHORTEN the session: the effective cap is
+   * min(this, SESSION_CAP_MINUTES), so a stored value — however it got there —
+   * can never buy a child more screen time than the deployment allows.
+   */
+  capMinutes?: number;
 }
 
 interface LiveSession {
   meta: StartSessionInput;
   startedAtMs: number;
+  /** Effective cap for this session, resolved and clamped once at start. */
+  capMs: number;
   ladder: LadderState;
   peer: PeerState;
   currentPage: number;
@@ -126,8 +135,24 @@ export class SessionOrchestrator {
     private readonly env: Env
   ) {}
 
-  private get capMs(): number {
-    return this.env.SESSION_CAP_MINUTES * 60_000;
+  /**
+   * The effective cap for one session, in ms.
+   *
+   * The parent's per-child setting is a CEILING REDUCTION, never an extension:
+   * a deployment's SESSION_CAP_MINUTES is the maximum any child may ever read
+   * for, and a stored `capMinutes` can only pull it down. Resolving it here —
+   * once, at start — means the rest of the orchestrator compares against a
+   * single number and a mid-session settings change cannot lengthen a session
+   * already in progress.
+   *
+   * Non-positive or non-finite stored values are ignored rather than trusted;
+   * the write path already bounds this to 1–60, and this is the second gate.
+   */
+  private resolveCapMs(capMinutes: number | undefined): number {
+    const serverCap = this.env.SESSION_CAP_MINUTES;
+    const requested =
+      typeof capMinutes === 'number' && Number.isFinite(capMinutes) && capMinutes > 0 ? capMinutes : serverCap;
+    return Math.min(requested, serverCap) * 60_000;
   }
 
   /** Register a freshly persisted ReadingSession for live turn handling. */
@@ -135,6 +160,7 @@ export class SessionOrchestrator {
     this.sessions.set(input.sessionId, {
       meta: input,
       startedAtMs: Date.now(),
+      capMs: this.resolveCapMs(input.capMinutes),
       ladder: initialLadderState,
       peer: createPeerState(input.ageYears, 0, input.story.title.length),
       currentPage: 0,
@@ -166,7 +192,7 @@ export class SessionOrchestrator {
       wordsRead: live.wordsRead,
       wordsCorrect: live.wordsCorrect,
       elapsedMs: Date.now() - live.startedAtMs,
-      capMs: this.capMs
+      capMs: live.capMs
     };
   }
 
@@ -185,7 +211,7 @@ export class SessionOrchestrator {
 
     // FR-H.1 — the cap is checked BEFORE any input is honored. The client
     // cannot squeeze one more turn out of a capped session.
-    if (Date.now() - live.startedAtMs >= this.capMs) {
+    if (Date.now() - live.startedAtMs >= live.capMs) {
       await this.endSession(live, true);
       return {
         ended: true,

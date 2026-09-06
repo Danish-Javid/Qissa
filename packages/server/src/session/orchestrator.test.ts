@@ -138,6 +138,51 @@ describe('SessionOrchestrator', () => {
     expect(writes.some((w) => w.op === 'audit' && (w.args as { event: string }).event === 'session.capped')).toBe(true);
   });
 
+  it("honours the parent's shorter per-child cap", async () => {
+    const { client } = fakePrisma();
+    const orchestrator = new SessionOrchestrator(client, env());
+    // Parent asked for 10 minutes; the server default is 15.
+    orchestrator.start({ ...startInput('s1'), capMinutes: 10 });
+    expect(orchestrator.snapshot('s1')?.capMs).toBe(10 * 60_000);
+
+    const live = (orchestrator as unknown as { sessions: Map<string, { startedAtMs: number }> }).sessions.get('s1');
+    if (live === undefined) throw new Error('session missing');
+    // Eleven minutes in: under the server default, over the parent's cap.
+    live.startedAtMs = Date.now() - 11 * 60 * 1000;
+
+    const result = await orchestrator.turn('s1', { kind: 'utterance', text: 'one more page' });
+    expect(result?.capped).toBe(true);
+  });
+
+  it('never lets a per-child cap EXTEND a session beyond the server ceiling', async () => {
+    const { client } = fakePrisma();
+    const orchestrator = new SessionOrchestrator(client, env());
+    // A stored value above the deployment's ceiling must be clamped down, not
+    // honoured: a parental control may only ever shorten screen time.
+    orchestrator.start({ ...startInput('s1'), capMinutes: 600 });
+    expect(orchestrator.snapshot('s1')?.capMs).toBe(15 * 60_000);
+
+    const live = (orchestrator as unknown as { sessions: Map<string, { startedAtMs: number }> }).sessions.get('s1');
+    if (live === undefined) throw new Error('session missing');
+    live.startedAtMs = Date.now() - 16 * 60 * 1000;
+
+    const result = await orchestrator.turn('s1', { kind: 'utterance', text: 'keep going' });
+    expect(result?.capped).toBe(true);
+  });
+
+  it('falls back to the server cap for absent or nonsense per-child values', async () => {
+    const { client } = fakePrisma();
+    const orchestrator = new SessionOrchestrator(client, env());
+    orchestrator.start(startInput('none'));
+    expect(orchestrator.snapshot('none')?.capMs).toBe(15 * 60_000);
+
+    orchestrator.start({ ...startInput('zero'), capMinutes: 0 });
+    expect(orchestrator.snapshot('zero')?.capMs).toBe(15 * 60_000);
+
+    orchestrator.start({ ...startInput('nan'), capMinutes: Number.NaN });
+    expect(orchestrator.snapshot('nan')?.capMs).toBe(15 * 60_000);
+  });
+
   it('escalates distress on a reading turn and records the category only', async () => {
     const { client, writes } = fakePrisma();
     const orchestrator = new SessionOrchestrator(client, env());
