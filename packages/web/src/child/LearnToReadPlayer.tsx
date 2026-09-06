@@ -110,6 +110,11 @@ export function LearnToReadPlayer({ childId, mockMode, onDone }: Props) {
   const [replayKey, setReplayKey] = useState(0);
   // Fluency: what Buddy heard on the "read them all" turn (null = not yet).
   const [fluencyHeard, setFluencyHeard] = useState<string[] | null>(null);
+  // Every word the child was ASKED to produce, and what actually happened.
+  // A ref, not state: the async mic handlers append across awaits, and a
+  // re-render must never lose an observation. This is the only thing that
+  // moves the learner model — serving the lesson moves nothing.
+  const outcomesRef = useRef<{ word: string; correct: boolean; assisted?: boolean }[]>([]);
   const [giftOk, setGiftOk] = useState(true);
   const [giftLoaded, setGiftLoaded] = useState(false);
 
@@ -194,10 +199,24 @@ export function LearnToReadPlayer({ childId, mockMode, onDone }: Props) {
     return () => controller.abort();
   }, [art]);
 
-  // Walking past the last beat lands the celebration.
+  // Walking past the last beat lands the celebration — and reports what the
+  // child actually did. This submission is the ONLY thing that moves the
+  // learner model: serving the lesson deliberately teaches nothing, so a
+  // lesson skipped in silence sends an empty list and advances nothing.
+  //
+  // Fire-and-forget on purpose. A failed submission costs one lesson's
+  // evidence; blocking the celebration on a network round trip would cost the
+  // child her ending, and she is five.
+  const submittedRef = useRef(false);
   useEffect(() => {
-    if (phase === 'step' && steps.length > 0 && stepIndex >= steps.length) setPhase('gift');
-  }, [phase, stepIndex, steps.length]);
+    if (phase !== 'step' || steps.length === 0 || stepIndex < steps.length) return;
+    setPhase('gift');
+    if (submittedRef.current) return;
+    submittedRef.current = true;
+    void api
+      .post('/lessons/outcomes', { childId, outcomes: outcomesRef.current })
+      .catch(() => undefined);
+  }, [phase, stepIndex, steps.length, childId]);
 
   // ------------------------------------------------------- model each beat
   // Buddy speaks the current beat. Passive modeling auto-sequences (a blend
@@ -318,6 +337,9 @@ export function LearnToReadPlayer({ childId, mockMode, onDone }: Props) {
       setListening(false);
       const said = capture.words.some((w) => matchesWithAccent(word, w));
       if (said) {
+        // Unaided on the first ask is the only evidence that counts toward
+        // introducing a sound; after a model it is repetition, not decoding.
+        outcomesRef.current.push({ word, correct: true, assisted: attempts > 0 });
         sfx.chime();
         setSparkle(true);
         setSaidIt(true);
@@ -337,6 +359,9 @@ export function LearnToReadPlayer({ childId, mockMode, onDone }: Props) {
         await speak(line, mockModeRef.current);
       } else {
         // Never punitive: model it, award the participation star, move on.
+        // Recorded as a miss — a wrong answer is evidence too, and it feeds
+        // the same reteach and spaced-repetition machinery a misread does.
+        outcomesRef.current.push({ word, correct: false });
         setSaidIt(false);
         setStars((s) => s + 1);
         setCaption(`Nice try! That word is “${word}”. Here comes the next one!`);
@@ -361,12 +386,29 @@ export function LearnToReadPlayer({ childId, mockMode, onDone }: Props) {
       if (!mounted.current) return;
       setListening(false);
       setFluencyHeard(capture.words);
-      const readCount = plan.blendWords.filter((w) => capture.words.some((h) => matchesWithAccent(w.word, h))).length;
-      sfx.chime();
-      setSparkle(true);
-      setStars((s) => s + Math.max(1, readCount));
-      setCaption('You read them ALL! What a reader! 🌟');
-      await speak('You read them all! What a reader!', mockModeRef.current);
+      const heard = plan.blendWords.filter((w) => capture.words.some((h) => matchesWithAccent(w.word, h)));
+      for (const w of plan.blendWords) {
+        outcomesRef.current.push({ word: w.word, correct: heard.includes(w) });
+      }
+
+      // Say what actually happened. This used to congratulate the child for
+      // reading them ALL even when the transcript contained none of the words
+      // — warm, and a lie a five-year-old cannot check. Warmth does not
+      // require pretending.
+      const total = plan.blendWords.length;
+      const line =
+        heard.length === 0
+          ? 'Buddy could not hear that one. Let us try again together!'
+          : heard.length === total
+            ? 'You read them all! What a reader!'
+            : `You read ${heard.length} of them! Let us keep going.`;
+      if (heard.length > 0) {
+        sfx.chime();
+        setSparkle(true);
+        setStars((s) => s + heard.length);
+      }
+      setCaption(heard.length === 0 ? `${line} 🎤` : `${line} 🌟`);
+      await speak(line, mockModeRef.current);
     } finally {
       micBusyRef.current = false;
     }
@@ -605,7 +647,7 @@ export function LearnToReadPlayer({ childId, mockMode, onDone }: Props) {
             <span aria-hidden>🎙️</span> Say “{step.word.word}”
           </button>
         )}
-        {step?.kind === 'sight' && canHear && saidIt === null && (
+        {step?.kind === 'sight' && canHear && saidIt !== true && (
           <button
             type="button"
             className="btn-big btn-face-leaf btn-glow"

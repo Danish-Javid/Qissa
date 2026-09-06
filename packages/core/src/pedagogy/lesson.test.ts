@@ -14,7 +14,7 @@ import { createLearnerModel } from '../learner/learner-model.js';
 import type { LearnerModel, WorldSeed } from '../types.js';
 import { isWordDecodable } from './decodability.js';
 import { segmentationOf } from './graphemes.js';
-import { buildLessonPlan, applyLessonToModel, isPicturableWord, LESSON_BLEND_WORDS, LESSON_NEW_SOUNDS, LESSON_SIGHT_WORDS } from './lesson.js';
+import { buildLessonPlan, applyLessonOutcomes, isPicturableWord, LESSON_BLEND_WORDS, LESSON_NEW_SOUNDS, LESSON_SIGHT_WORDS } from './lesson.js';
 
 const SEED: WorldSeed = { heroName: 'Ayla', city: 'Lahore', petName: 'Simi', petKind: 'cat' };
 
@@ -134,39 +134,105 @@ describe('buildLessonPlan', () => {
   });
 });
 
-describe('applyLessonToModel', () => {
-  it('credits exactly the sounds the lesson taught, moving the boundary to the plan', () => {
+describe('applyLessonOutcomes', () => {
+  /** Every word this lesson asks the child to produce, read correctly. */
+  function allCorrect(plan: ReturnType<typeof buildLessonPlan>) {
+    return [
+      ...plan.newSounds.map((sound) => ({ word: sound.exampleWord, correct: true })),
+      ...plan.blendWords.map((blend) => ({ word: blend.word, correct: true })),
+      ...plan.sightWords.map((sight) => ({ word: sight.word, correct: true }))
+    ];
+  }
+
+  it('teaches NOTHING when the child did nothing', () => {
+    // The regression this whole change exists for: a lesson could be opened,
+    // skipped, and credited, because serving it advanced the boundary.
     const model = createLearnerModel(1);
     const plan = buildLessonPlan(model, SEED);
-    const updated = applyLessonToModel(model, plan);
+    const updated = applyLessonOutcomes(model, plan, []);
+
+    expect(updated.taughtGraphemes).toEqual(model.taughtGraphemes);
+    expect(updated.taughtTrickyWords).toEqual(model.taughtTrickyWords);
+    expect(updated.currentLevel).toBe(model.currentLevel);
+  });
+
+  it('teaches the sounds the child actually demonstrated', () => {
+    const model = createLearnerModel(1);
+    const plan = buildLessonPlan(model, SEED);
+    const updated = applyLessonOutcomes(model, plan, allCorrect(plan));
+
     for (const g of plan.taughtGraphemes) expect(updated.taughtGraphemes).toContain(g);
-    // The taught set grew by exactly the new sounds — no more, no less.
     expect(updated.taughtGraphemes.length).toBe(plan.taughtGraphemes.length);
   });
 
-  it('credits the sight words the lesson showed', () => {
+  it('does not credit a sound the child only repeated after a model', () => {
+    // Repeating a word seconds after hearing it is not decoding it.
+    const model = createLearnerModel(1);
+    const plan = buildLessonPlan(model, SEED);
+    const assisted = allCorrect(plan).map((o) => ({ ...o, assisted: true }));
+    const updated = applyLessonOutcomes(model, plan, assisted);
+
+    expect(updated.taughtGraphemes).toEqual(model.taughtGraphemes);
+  });
+
+  it('credits a sight word only when the child said it', () => {
     const model = createLearnerModel(1);
     const plan = buildLessonPlan(model, SEED);
     expect(plan.sightWords.length).toBeGreaterThan(0);
-    const updated = applyLessonToModel(model, plan);
+
+    const missed = applyLessonOutcomes(
+      model,
+      plan,
+      plan.sightWords.map((sight) => ({ word: sight.word, correct: false }))
+    );
     for (const sight of plan.sightWords) {
-      expect(updated.taughtTrickyWords).toContain(sight.word.toLowerCase());
+      expect(missed.taughtTrickyWords).not.toContain(sight.word.toLowerCase());
     }
+
+    const said = applyLessonOutcomes(model, plan, allCorrect(plan));
+    for (const sight of plan.sightWords) {
+      expect(said.taughtTrickyWords).toContain(sight.word.toLowerCase());
+    }
+  });
+
+  it('records misses as evidence rather than discarding them', () => {
+    const model = createLearnerModel(1);
+    const plan = buildLessonPlan(model, SEED);
+    const word = plan.blendWords[0]!.word;
+    const updated = applyLessonOutcomes(model, plan, [{ word, correct: false }]);
+
+    // The grapheme now has evidence against it, which is what drives reteach
+    // and spaced repetition — a wrong answer must not simply vanish.
+    const grapheme = plan.blendWords[0]!.graphemes[0]!;
+    const stat = updated.graphemeStats[grapheme];
+    expect(stat?.exposures ?? 0).toBeGreaterThan(0);
+    expect(stat?.correct ?? 0).toBe(0);
+  });
+
+  it('stops at the first sound with no evidence rather than skipping past it', () => {
+    const model = createLearnerModel(1);
+    const plan = buildLessonPlan(model, SEED);
+    expect(plan.newSounds.length).toBeGreaterThan(1);
+
+    // Only the LAST sound demonstrated: the curriculum is ordered, so nothing
+    // may be introduced over the top of a sound with no evidence.
+    const last = plan.newSounds.at(-1)!;
+    const updated = applyLessonOutcomes(model, plan, [{ word: last.exampleWord, correct: true }]);
+    expect(updated.taughtGraphemes.length).toBe(model.taughtGraphemes.length);
   });
 
   it('credits nothing new on a review lesson — fluency never promotes a reader', () => {
     const model = modelWith(ALL, phonicsScope.levels.length, trickyWordsUpTo(phonicsScope.levels.length));
     const plan = buildLessonPlan(model, SEED);
     expect(plan.isReview).toBe(true);
-    const updated = applyLessonToModel(model, plan);
+    const updated = applyLessonOutcomes(model, plan, allCorrect(plan));
     expect(updated.taughtGraphemes).toEqual(model.taughtGraphemes);
-    expect(updated.taughtTrickyWords).toEqual(model.taughtTrickyWords);
   });
 
   it('never drops what the child already knew', () => {
     const model = modelWith(graphemesUpTo(2), 2);
     const plan = buildLessonPlan(model, SEED);
-    const updated = applyLessonToModel(model, plan);
+    const updated = applyLessonOutcomes(model, plan, allCorrect(plan));
     for (const g of model.taughtGraphemes) expect(updated.taughtGraphemes).toContain(g);
     for (const w of model.taughtTrickyWords) expect(updated.taughtTrickyWords).toContain(w);
   });

@@ -20,8 +20,8 @@
  * on the most recent sounds) rather than an empty plan.
  */
 import { graphemesUpTo, phonicsScope, trickyWordsUpTo, wordBanks, type WordBank } from '../data/index.js';
-import { introduceNextGrapheme, teachTrickyWord } from '../learner/learner-model.js';
-import type { LearnerModel, WorldSeed } from '../types.js';
+import { applyWordOutcomes, introduceNextGrapheme, teachTrickyWord } from '../learner/learner-model.js';
+import type { LearnerModel, WordOutcome, WorldSeed } from '../types.js';
 import { isWordDecodable, type DecodabilityContext } from './decodability.js';
 import { parseGraphemes, segmentationOf } from './graphemes.js';
 
@@ -250,14 +250,79 @@ export function buildLessonPlan(
  * fluency practice never silently promotes a reader. Pure: the caller
  * persists the result, exactly like every other learner-model update.
  */
-export function applyLessonToModel(model: LearnerModel, plan: LessonPlan, at = new Date()): LearnerModel {
+/**
+ * One word the child was actually asked to produce, and what happened.
+ *
+ * `assisted` marks a word the companion modelled first — repeating a word
+ * seconds after hearing it is not the same evidence as decoding it cold, and
+ * conflating the two is how a record starts claiming more than it knows.
+ */
+export interface LessonOutcome {
+  word: string;
+  correct: boolean;
+  assisted?: boolean;
+}
+
+/**
+ * Fold a finished lesson's REAL outcomes into the learner model.
+ *
+ * This replaced applyLessonToModel, which advanced the taught boundary the
+ * moment a lesson was SERVED. That made mastery a function of tapping "start":
+ * a child could open a lesson, skip every step, and be handed harder material
+ * next time, because nothing downstream could tell a lesson that was presented
+ * from one that was practised.
+ *
+ * The rule now: serving a lesson teaches nothing. A sound is introduced only
+ * once the child has produced a word carrying it at least once unaided, and a
+ * sight word only once she has said it. Everything she was asked is recorded
+ * either way — a wrong answer is evidence too, and it feeds the same
+ * spaced-repetition and reteach machinery a wrong read does.
+ */
+export function applyLessonOutcomes(
+  model: LearnerModel,
+  plan: LessonPlan,
+  outcomes: LessonOutcome[],
+  at = new Date()
+): LearnerModel {
+  // Only unassisted successes count as evidence a sound has landed.
+  const demonstrated = new Set(
+    outcomes.filter((o) => o.correct && o.assisted !== true).map((o) => o.word.toLowerCase())
+  );
+
+  // A new sound is introduced when ANY word carrying it was read unaided.
+  // In-sequence, because introduceNextGrapheme walks the curriculum order:
+  // stop at the first sound with no evidence rather than skipping past it.
   let updated = model;
-  const newSoundCount = plan.taughtGraphemes.length - updated.taughtGraphemes.length;
-  for (let i = 0; i < newSoundCount; i++) {
+  for (const sound of plan.newSounds) {
+    const carriers = [sound.exampleWord, ...plan.blendWords.filter((b) => b.graphemes.includes(sound.grapheme)).map((b) => b.word)];
+    const shown = carriers.some((w) => demonstrated.has(w.toLowerCase()));
+    if (!shown) break;
     updated = introduceNextGrapheme(updated, at).model;
   }
+
+  // Sight words are taught as wholes, so saying one IS the demonstration.
   for (const sight of plan.sightWords) {
-    updated = teachTrickyWord(updated, sight.word, at);
+    if (demonstrated.has(sight.word.toLowerCase())) updated = teachTrickyWord(updated, sight.word, at);
   }
-  return updated;
+
+  // Every attempt becomes grapheme-level evidence, right and wrong alike.
+  const wordOutcomes: WordOutcome[] = outcomes.map((o, index) => ({
+    expected: o.word.toLowerCase(),
+    index,
+    outcome: o.correct ? 'correct' : 'substitution',
+    graphemes: parseGraphemes(o.word.toLowerCase(), plan.taughtGraphemes) ?? [o.word.toLowerCase()],
+    ladderStep: o.assisted === true ? 1 : 0
+  }));
+
+  return applyWordOutcomes(updated, wordOutcomes, at);
+}
+
+/**
+ * How many of this lesson's new sounds the child has no evidence for yet.
+ *
+ * The planner uses this to stop stacking un-evidenced material: a child who
+ * has been shown three sounds and demonstrated none does not need a fourth.
+ */
+export function unevidencedSounds(model: LearnerModel): string[] {
+  return model.taughtGraphemes.filter((g) => (model.graphemeStats[g]?.exposures ?? 0) === 0);
 }

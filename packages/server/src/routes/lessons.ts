@@ -22,7 +22,7 @@
  */
 import { Prisma } from '@prisma/client';
 import {
-  applyLessonToModel,
+  applyLessonOutcomes,
   buildLessonPlan,
   isPicturableWord,
   type LearnerModel,
@@ -41,6 +41,28 @@ import { parseBody, parseParams } from './validate.js';
 
 const LessonBody = z.object({ childId: z.string().min(1).max(64) }).strict();
 const LessonGiftParams = z.object({ childId: z.string().min(1).max(64) }).strict();
+
+/**
+ * What the child actually produced. `assisted` marks a word the companion
+ * modelled first — repeating a word seconds after hearing it is weaker
+ * evidence than decoding it cold, and the model must not confuse the two.
+ */
+const LessonOutcomesBody = z
+  .object({
+    childId: z.string().min(1).max(64),
+    outcomes: z
+      .array(
+        z
+          .object({
+            word: z.string().min(1).max(30).regex(/^[a-zA-Z']+$/),
+            correct: z.boolean(),
+            assisted: z.boolean().optional()
+          })
+          .strict()
+      )
+      .max(60)
+  })
+  .strict();
 /** Word art is keyed by a bare curriculum word: lowercase letters only, short.
  *  The real allow-list check (isPicturableWord) happens in the handler. */
 const LessonArtParams = z.object({ word: z.string().regex(/^[a-z]{1,14}$/) }).strict();
@@ -75,15 +97,15 @@ export async function lessonRoutes(app: FastifyInstance): Promise<void> {
     // child never meets a word she cannot yet sound out.
     const plan = buildLessonPlan(model, worldSeed);
 
-    // Advance the mastery boundary exactly as the read-along credits on serve:
-    // the new sounds this lesson taught (which also pulls in the level's tricky
-    // words and bumps currentLevel) plus the sight words shown. A review lesson
-    // adds no new sounds, so it credits nothing new — fluency practice never
-    // silently promotes a reader. Pure and tested in @qissa/core.
-    const updated = applyLessonToModel(model, plan);
-
+    // Serving a lesson teaches NOTHING. The learner model is untouched here
+    // and moves only when POST /outcomes reports what the child actually did.
+    //
+    // This used to call applyLessonToModel, which advanced the taught boundary
+    // the moment a lesson was served — so a child could open a lesson, skip
+    // every step, and be handed harder material next time. Mastery was a
+    // function of tapping "start".
     await audit(prisma, {
-      event: 'lesson.served',
+      event: 'lesson.presented',
       childId: child.id,
       detail: {
         level: plan.level,
@@ -92,12 +114,6 @@ export async function lessonRoutes(app: FastifyInstance): Promise<void> {
         blendWords: plan.blendWords.map((b) => b.word),
         sightWords: plan.sightWords.map((s) => s.word)
       }
-    });
-
-    await prisma.learnerModel.upsert({
-      where: { childId: child.id },
-      create: { childId: child.id, schemaVersion: updated.schemaVersion, state: updated as unknown as Prisma.InputJsonValue },
-      update: { schemaVersion: updated.schemaVersion, state: updated as unknown as Prisma.InputJsonValue }
     });
 
     // Word pictures: every CONCRETE word this lesson names gets a FLUX
@@ -118,6 +134,72 @@ export async function lessonRoutes(app: FastifyInstance): Promise<void> {
       // Child-keyed, so the celebration keepsake is drawn once per child and
       // reused (cost-safe); the client warms it while the lesson plays.
       giftUrl: `/api/lessons/${child.id}/gift`
+    });
+  });
+
+  /**
+   * What the child did — the only thing that moves the learner model.
+   *
+   * The plan is rebuilt server-side from the SAME model the lesson was served
+   * from, rather than trusted from the client: a child's device must not be
+   * able to describe its own curriculum. The client reports outcomes only, and
+   * every word is matched against the plan it was actually offered.
+   */
+  app.post('/outcomes', { preHandler: requireAuth(app) }, async (request, reply) => {
+    const body = parseBody(LessonOutcomesBody, request.body, reply);
+    if (body === null) return;
+
+    const child = await ownedChild(prisma, body.childId, request.auth.parent.id);
+    if (child === null) return denyNotFound(reply);
+
+    const learner = await prisma.learnerModel.findUnique({ where: { childId: child.id } });
+    if (learner === null) return denyNotFound(reply);
+
+    const model = learner.state as unknown as LearnerModel;
+    const plan = buildLessonPlan(model, child.worldSeed as unknown as WorldSeed);
+
+    // Only words this lesson actually offered may carry evidence. Anything
+    // else is discarded rather than trusted — an outcome for a word the child
+    // was never shown is either a bug or a forged claim of mastery.
+    const offered = new Set(
+      [
+        ...plan.newSounds.map((sound) => sound.exampleWord),
+        ...plan.blendWords.map((blend) => blend.word),
+        ...plan.sightWords.map((sight) => sight.word)
+      ].map((w) => w.toLowerCase())
+    );
+    const accepted = body.outcomes.filter((o) => offered.has(o.word.toLowerCase()));
+
+    const updated = applyLessonOutcomes(model, plan, accepted);
+
+    await audit(prisma, {
+      event: 'lesson.outcomes',
+      childId: child.id,
+      detail: {
+        offered: [...offered],
+        accepted: accepted.map((o) => ({ word: o.word, correct: o.correct, assisted: o.assisted === true })),
+        rejected: body.outcomes.length - accepted.length,
+        graphemesBefore: model.taughtGraphemes.length,
+        graphemesAfter: updated.taughtGraphemes.length
+      }
+    });
+
+    await prisma.learnerModel.upsert({
+      where: { childId: child.id },
+      create: {
+        childId: child.id,
+        schemaVersion: updated.schemaVersion,
+        state: updated as unknown as Prisma.InputJsonValue
+      },
+      update: { schemaVersion: updated.schemaVersion, state: updated as unknown as Prisma.InputJsonValue }
+    });
+
+    return reply.send({
+      recorded: accepted.length,
+      // Honest, and the parent layer renders it: how many sounds this session
+      // actually moved, which is zero for a lesson the child skipped.
+      soundsIntroduced: updated.taughtGraphemes.length - model.taughtGraphemes.length,
+      level: updated.currentLevel
     });
   });
 
