@@ -30,10 +30,12 @@ qissa.online, www.qissa.online {
 	}
 
 	reverse_proxy app:3000 {
-		# The app trusts X-Forwarded-* only when NODE_ENV=production, and
-		# Caddy sets them. Without this the rate limiter would see every
-		# request as coming from the proxy's single IP and throttle all
-		# parents together.
+		# Caddy appends the real client to X-Forwarded-For. The app believes that
+		# header only from the addresses in TRUSTED_PROXY_NETS -- set to the
+		# compose network in docker-compose.prod.yml -- and not merely because
+		# NODE_ENV=production. Without the app trusting this hop the rate limiter
+		# would see every request as coming from the proxy's single IP and
+		# throttle all parents together.
 		header_up X-Forwarded-Host {host}
 	}
 }

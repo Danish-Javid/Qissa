@@ -279,15 +279,30 @@ HTTP-01 challenge on port 80 to get the certificate:
 Then `docker compose -f docker-compose.prod.yml logs -f caddy` should show a
 certificate obtained for `qissa.online`, and the site is live over HTTPS.
 
-Three things that are easy to get wrong:
+Four things that are easy to get wrong:
 
-1. **`COOKIE_SECURE=true` is mandatory.** The compose file sets it. A browser
-   silently drops a `Secure` cookie over plain HTTP, so getting this wrong
-   does not warn — it just logs every parent out.
+1. **`COOKIE_SECURE=true` is mandatory.** The compose file sets it, and the
+   server now refuses to boot without it. A browser silently drops a `Secure`
+   cookie over plain HTTP, so getting this wrong does not warn — it just logs
+   every parent out.
 2. **Do not publish the app's port.** Caddy is the only ingress; exposing
    `3000` would let anyone reach the app over plain HTTP by IP and bypass TLS.
-3. **Change `SEED_PARENT_EMAIL` / `SEED_PARENT_PASSWORD`.** The development
-   defaults are published in this repository.
+   Item 3 depends on this.
+3. **`TRUSTED_PROXY_NETS` is what makes rate limiting per-parent.** The app
+   sees Caddy's container IP on every connection, so it has to be told to
+   believe Caddy's `X-Forwarded-For`; otherwise the limiter buckets the whole
+   internet as one caller and the 10/min credential cap becomes a site-wide
+   lockout. The compose file defaults it to the private ranges, which is safe
+   *only* while the port stays unpublished (item 2). Publish the port and you
+   must narrow it to Caddy's exact address, or any caller can spoof a fresh
+   header per request and walk straight through the cap.
+4. **Leave `SEED_PARENT_PASSWORD` empty.** There is no default any more: an
+   empty value makes `npm run seed` generate a strong password and print it
+   once. The literal this file used to ship is still in the repository's
+   history and is now rejected outright, so do not reintroduce it — and if a
+   live deployment was ever seeded with it, that account needs deleting, which
+   no code change can do for you. `SEED_PARENT_EMAIL` is not a secret, but
+   change it if you do not want a predictable demo login.
 
 Updating a running deployment:
 
