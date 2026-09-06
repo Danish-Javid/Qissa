@@ -16,6 +16,7 @@ import { ageInYears, ctx, rawAgeInYears } from '../context.js';
 import { ART_CACHE_VERSION, stylePrompt } from '../providers/art-style.js';
 import { MockImageGenerator } from '../providers/mock/index.js';
 import type { ImageResult } from '../providers/interfaces.js';
+import { ensurePageArt, illustrationDir, storyArtStatus, warmStoryArt } from '../story/art.js';
 import { prefetchStory, serveStory } from '../story/story-engine.js';
 import { denyNotFound, ownedChild, requireAuth } from './guards.js';
 import { parseBody, parseParams } from './validate.js';
@@ -33,12 +34,8 @@ const GiftParams = z.object({ id: z.string().min(1).max(64) }).strict();
  *  rich picture-talk, each held until its FLUX art lands, clear two minutes. */
 const STORY_TIME_PAGES = 8;
 
-/** On-disk illustration cache — images persist across rebuilds and are
- *  regenerated once per story page, never per request (NFR-4.4 cost). */
-const illustrationDir = path.resolve(process.cwd(), 'data', 'illustrations');
-
-/** In-flight generation dedup — the client prefetches pages while the <img>
- *  for the current page fires; both must share ONE vendor call, not two. */
+/** In-flight dedup for the GIFT image only; page art is deduped inside
+ *  story/art.ts, which both the warmer and the page route go through. */
 const pendingImages = new Map<string, Promise<ImageResult>>();
 
 /**
@@ -162,6 +159,24 @@ export async function storyRoutes(app: FastifyInstance): Promise<void> {
         pageCountOverride: STORY_TIME_PAGES, // a longer book, so it runs ~2 min
         dailyStoryBudget: env.DAILY_STORY_BUDGET_PER_CHILD
       });
+      // Draw the WHOLE book now, four pages at a time, rather than leaving the
+      // client's <img> requests to trigger generation one page ahead of the
+      // narration. At the measured ~13s an illustration, lazy drawing meant
+      // the last picture landed ~40s into a two-minute story — the child heard
+      // page six over page two's placeholder. Fire-and-forget: the story is
+      // returned immediately and /art-status tells the player when to start.
+      const storyImages = chooseImages(child.settings, providers.images);
+      void warmStoryArt({
+        storyId: result.storyId,
+        pages: result.story.pages.map((p) => ({
+          hint: p.illustrationHint ?? 'a warm storybook scene',
+          subject: p.text ?? p.illustrationHint ?? ''
+        })),
+        images: storyImages,
+        lowBandwidth: storyImages !== providers.images,
+        mock: providers.mode === 'mock'
+      }).catch(() => undefined);
+
       return reply.code(201).send({
         storyId: result.storyId,
         source: result.source,
@@ -223,33 +238,53 @@ export async function storyRoutes(app: FastifyInstance): Promise<void> {
     const images = chooseImages(story.child.settings, providers.images);
     const lowBandwidth = images !== providers.images;
 
-    const ext = lowBandwidth || providers.mode === 'mock' ? 'svg' : 'png';
-    const suffix = lowBandwidth ? '-lite' : '';
-    const filePath = path.join(illustrationDir, `${ART_CACHE_VERSION}-${story.id}-${params.page}${suffix}.${ext}`);
     try {
-      const cached = await readFile(filePath);
-      return reply.type(ext === 'svg' ? 'image/svg+xml' : 'image/png').send(cached);
-    } catch {
-      // Not cached yet — generate (or join an in-flight generation), persist, serve.
-    }
-
-    try {
-      let pending = pendingImages.get(filePath);
-      if (pending === undefined) {
-        // The scene hint is merged with the house art direction (researched
-        // kid-loved style) so every provider draws in the same warm world.
-        pending = images.generateImage(stylePrompt(hint), subject);
-        pendingImages.set(filePath, pending);
-        pending.catch(() => undefined).finally(() => pendingImages.delete(filePath));
-      }
-      const result = await pending;
-      await writeFile(filePath, result.image).catch(() => undefined);
+      // Shared with the server-side warmer, so a page the warmer is already
+      // drawing is JOINED rather than generated a second time.
+      const result = await ensurePageArt({
+        storyId: story.id,
+        pageIndex: params.page,
+        lowBandwidth,
+        mock: providers.mode === 'mock',
+        images,
+        hint,
+        subject
+      });
       return reply.type(result.mimeType).send(Buffer.from(result.image));
     } catch {
       // Image generation failed — the picture-walk degrades to text-only;
       // never surface vendor internals to the client (fail-closed).
       return reply.code(404).send({ error: 'illustration unavailable' });
     }
+  });
+
+  /**
+   * Is this story's art ready to play?
+   *
+   * Story Time narrates itself; if it starts before the pictures exist, the
+   * child hears page three while looking at page one's placeholder. The
+   * player polls this and holds the curtain until the book is playable, which
+   * is only honest because the server starts drawing every page the moment
+   * the story is created rather than waiting for the client to ask.
+   */
+  app.get('/:id/art-status', { preHandler: requireAuth(app) }, async (request, reply) => {
+    const params = parseParams(StoryIdParams, request.params, reply);
+    if (params === null) return;
+
+    const story = await prisma.story.findUnique({
+      where: { id: params.id },
+      include: { child: { select: { parentId: true, settings: true } } }
+    });
+    if (story === null || story.child.parentId !== request.auth.parent.id) return denyNotFound(reply);
+
+    const content = story.content as unknown as { pages?: unknown[] };
+    const pageCount = content.pages?.length ?? 0;
+    const images = chooseImages(story.child.settings, providers.images);
+    const status = await storyArtStatus(story.id, pageCount, {
+      lowBandwidth: images !== providers.images,
+      mock: providers.mode === 'mock'
+    });
+    return reply.send(status);
   });
 
   /**

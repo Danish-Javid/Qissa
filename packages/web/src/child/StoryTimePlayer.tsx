@@ -102,6 +102,13 @@ function rateFor(pacing: StoryPacing): number {
  *  appears the instant it lands; this only caps the wait. */
 const ART_WAIT_CAP_MS = 18_000;
 
+/** Longest we hold the curtain waiting for the server to finish drawing the
+ *  book. Past this we start anyway: a vendor outage should delay a story, not
+ *  cancel it, and each page still falls back to its placeholder. */
+const PREPARE_CAP_MS = 75_000;
+/** How often we ask whether the book is ready. Cheap: a disk stat per page. */
+const POLL_INTERVAL_MS = 1_500;
+
 export function StoryTimePlayer({ childId, mockMode, pacing, onDone }: Props) {
   const [story, setStory] = useState<Story | null>(null);
   const [storyId, setStoryId] = useState<string | null>(null);
@@ -113,6 +120,8 @@ export function StoryTimePlayer({ childId, mockMode, pacing, onDone }: Props) {
   const [caption, setCaption] = useState('');
   const [artOk, setArtOk] = useState(true);
   const [artLoaded, setArtLoaded] = useState(false);
+  // How much of the book is drawn, so the wait shows honest progress.
+  const [artProgress, setArtProgress] = useState<{ ready: number; total: number } | null>(null);
 
   const mounted = useRef(true);
   // Set the moment this page's illustration resolves (loaded OR failed) so the
@@ -138,7 +147,8 @@ export function StoryTimePlayer({ childId, mockMode, pacing, onDone }: Props) {
         setStoryId(response.storyId);
         setStory(response.story);
         setEffectivePacing(response.pacing);
-        setPhase('playing');
+        // Stay in 'loading': the readiness effect starts playback once the
+        // server has drawn the book (or the cap expires).
       })
       .catch(() => {
         // 401 session expired, 403 Story Time disabled, 503 no safe story —
@@ -151,30 +161,45 @@ export function StoryTimePlayer({ childId, mockMode, pacing, onDone }: Props) {
     };
   }, [childId]);
 
-  // -------------------------------------------------- warm the pictures
-  // Fetch the illustrations THREE-WIDE while the story plays, so the picture is
-  // already on disk when the narration reaches it (the server dedups against
-  // the visible <img>). Fully sequential warming left every late page waiting
-  // a whole image-latency each; three workers finish a book in ~a third of the
-  // time, which is what lets the page actually SHOW its art before turning.
+  // ------------------------------------------- hold the curtain until ready
+  // The server starts drawing EVERY page the moment the story is created, so
+  // here we only wait for the book to be playable and then start.
+  //
+  // This replaced client-side warming, which could not win: an illustration
+  // takes ~13s on the configured endpoint, so warming three-wide from the
+  // moment the player mounted still put the last picture ~40s into a
+  // two-minute story. The child heard page six over page two's placeholder.
+  // Waiting a few seconds up front for a complete book is a better experience
+  // than a story that visibly outruns its own pictures.
+  //
+  // Capped, because a vendor outage must delay the story, never cancel it:
+  // at the cap we play anyway and each page falls back to its placeholder.
   useEffect(() => {
     if (story === null || storyId === null) return;
-    const controller = new AbortController();
-    const queue: number[] = [];
-    for (let i = 0; i < story.pages.length; i++) queue.push(i);
-    const worker = async (): Promise<void> => {
+    let cancelled = false;
+    const startedAt = Date.now();
+
+    const poll = async (): Promise<void> => {
       for (;;) {
-        if (controller.signal.aborted) return;
-        const next = queue.shift();
-        if (next === undefined) return;
-        await fetch(`/api/stories/${storyId}/pages/${next}/illustration`, {
-          credentials: 'same-origin',
-          signal: controller.signal
-        }).catch(() => undefined);
+        if (cancelled) return;
+        try {
+          const status = await api.get<{ ready: number; total: number }>(`/stories/${storyId}/art-status`);
+          if (cancelled) return;
+          setArtProgress(status);
+          if (status.ready >= status.total) break;
+        } catch {
+          break; // Status unavailable — start rather than stall.
+        }
+        if (Date.now() - startedAt > PREPARE_CAP_MS) break;
+        await sleep(POLL_INTERVAL_MS);
       }
+      if (!cancelled) setPhase('playing');
     };
-    void Promise.all([worker(), worker(), worker()]);
-    return () => controller.abort();
+
+    void poll();
+    return () => {
+      cancelled = true;
+    };
   }, [story, storyId]);
 
   // --------------------------------------------- narrate + auto-advance
@@ -275,7 +300,30 @@ export function StoryTimePlayer({ childId, mockMode, pacing, onDone }: Props) {
         <Scene theme="kindness" seed={childId} />
         <div className="relative z-10 flex h-full flex-col items-center justify-center gap-6 p-8 text-center">
           <Buddy mood="think" size={210} />
-          <div className="bubble pop-in text-2xl font-bold">Buddy is opening your storybook… 📚</div>
+          <div className="bubble pop-in text-2xl font-bold">Buddy is drawing your storybook… 📚</div>
+          {/* Honest progress, and a reason the wait is worth it. A child of
+              this age cannot read it — it is for the grown-up sitting there,
+              who otherwise sees a spinner and assumes the app has hung. */}
+          {artProgress !== null && artProgress.total > 0 ? (
+            <div
+              className="flex flex-col items-center gap-2"
+              role="status"
+              aria-live="polite"
+              aria-label={`Drawing picture ${Math.min(artProgress.ready + 1, artProgress.total)} of ${artProgress.total}`}
+            >
+              <div className="flex gap-2" aria-hidden="true">
+                {Array.from({ length: artProgress.total }, (_, i) => (
+                  <span
+                    key={i}
+                    className={`h-3 w-3 rounded-full ${i < artProgress.ready ? 'bg-emerald-500' : 'bg-slate-300'}`}
+                  />
+                ))}
+              </div>
+              <p className="text-sm text-slate-600">
+                {artProgress.ready} of {artProgress.total} pictures ready
+              </p>
+            </div>
+          ) : null}
         </div>
       </div>
     );

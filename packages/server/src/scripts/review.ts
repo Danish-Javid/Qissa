@@ -22,33 +22,7 @@
 import { readFileSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-
-// ---------------------------------------------------------------------------
-// Config — read straight from .env, because the app has no dotenv and these
-// vars are deliberately absent from the validated runtime environment.
-// ---------------------------------------------------------------------------
-
-/** Minimal .env reader: KEY=VALUE, ignoring blanks and # comments. */
-function readDotEnv(file: string): Record<string, string> {
-  let raw: string;
-  try {
-    raw = readFileSync(file, 'utf8');
-  } catch {
-    return {};
-  }
-  const out: Record<string, string> = {};
-  for (const line of raw.split(/\r?\n/)) {
-    const trimmed = line.trim();
-    if (trimmed === '' || trimmed.startsWith('#')) continue;
-    const eq = trimmed.indexOf('=');
-    if (eq === -1) continue;
-    const key = trimmed.slice(0, eq).trim();
-    // Strip one layer of surrounding quotes, which people paste by habit.
-    const value = trimmed.slice(eq + 1).trim().replace(/^(['"])(.*)\1$/, '$2');
-    out[key] = value;
-  }
-  return out;
-}
+import { readDotEnv } from './dotenv.js';
 
 /** Repo root, from packages/server/src/scripts. */
 const ROOT = path.resolve(import.meta.dirname, '..', '..', '..', '..');

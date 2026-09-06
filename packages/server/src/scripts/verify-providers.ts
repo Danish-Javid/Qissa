@@ -16,10 +16,18 @@
  * working story path, because knowing WHICH of the four is misconfigured is
  * the entire value of running this.
  */
+import path from 'node:path';
 import { loadEnv } from '../config.js';
 import { getProviders } from '../providers/index.js';
 import { buildStoryConstraints, createLearnerModel, type WorldSeed } from '@qissa/core';
 import { PROMPT_VERSION } from '../story/story-engine.js';
+import { loadDotEnvInto } from './dotenv.js';
+
+// Nothing loads .env for a script run from a terminal — the server gets its
+// environment from Docker Compose. Without this, the README's "run
+// verify:providers before demoing" died on `DATABASE_URL: expected string,
+// received undefined` before contacting a single vendor.
+loadDotEnvInto(path.resolve(import.meta.dirname, '..', '..', '..', '..', '.env'));
 
 const WORLD_SEED: WorldSeed = { heroName: 'Mina', city: 'Lahore' };
 
