@@ -79,6 +79,15 @@ export interface ServeStoryInput {
    * generators produce exactly that many pages. Omitted → adaptive length.
    */
   pageCountOverride?: number;
+  /**
+   * Must the page text be decodable by this child? Default true.
+   *
+   * False for Story Time, which is receptive: the player narrates
+   * `pictureTalk` and no one reads the page text, so constraining it to the
+   * child's taught graphemes bought nothing and wrecked the storytelling.
+   * Safety gates are unaffected — moderation runs on every surface regardless.
+   */
+  decodable?: boolean;
 }
 
 export interface ServeStoryResult {
@@ -132,7 +141,16 @@ function worldNames(worldSeed: WorldSeed): string[] {
     .filter((t) => t.length > 0);
 }
 
-/** Count a grapheme's occurrences across surfaces (target-count rule). */
+/** Count a grapheme's occurrences across surfaces (target-count rule).
+ *
+ * Occurrences, not distinct words. Distinct words are the better pedagogy —
+ * six different words carrying "s" generalise it, six repeats of "sat" do not
+ * — but the curriculum's own level-1 bank offers only five decodable carriers
+ * for "s", and the deterministic fallback (which guarantees a child always
+ * gets a story) cannot spread across them. Changing this needs the mock
+ * generator to select distinct carriers first; until then the PROMPT asks for
+ * variety and the gate measures what it can actually enforce, which is at
+ * least the same quantity both sides now name. */
 function countOccurrences(surfaces: string[], grapheme: string): number {
   let count = 0;
   for (const surface of surfaces) {
@@ -185,17 +203,30 @@ export function generationLevel(model: LearnerModel, targetGrapheme: string): nu
  * Run every gate over a candidate story. Returns the decision timeline;
  * the caller reads `every(ok)` to accept or reject.
  */
-export function checkStory(story: GeneratedStory, constraints: StoryConstraints, ctx: DecodabilityContext): PipelineDecision[] {
+export function checkStory(
+  story: GeneratedStory,
+  constraints: StoryConstraints,
+  ctx: DecodabilityContext,
+  opts: { decodable?: boolean } = {}
+): PipelineDecision[] {
+  // Default true: a caller that forgets the flag gets the STRICTER gate.
+  const decodable = opts.decodable !== false;
   const decisions: PipelineDecision[] = [];
   const surfaces = storySurfaces(story);
 
   // 1. Decodability — the child is never shown an undecodable word.
-  const violations = surfaces.flatMap((s) => validateText(s, ctx).violations);
-  decisions.push({
-    check: 'decodability',
-    ok: violations.length === 0,
-    detail: violations.length > 0 ? `violations: ${violations.slice(0, 8).map((v) => v.word).join(', ')}` : undefined
-  });
+  //
+  // Skipped for narrated stories, where there is no such child: Story Time
+  // speaks `pictureTalk` and nobody reads the page text. Safety is NOT
+  // skipped — moderation below runs on every surface either way.
+  if (decodable) {
+    const violations = surfaces.flatMap((s) => validateText(s, ctx).violations);
+    decisions.push({
+      check: 'decodability',
+      ok: violations.length === 0,
+      detail: violations.length > 0 ? `violations: ${violations.slice(0, 8).map((v) => v.word).join(', ')}` : undefined
+    });
+  }
 
   // 2. Moderation — every surface, including the spoken picture-walk lines,
   //    the illustration prompts, and the parent-facing offline task.
@@ -216,23 +247,28 @@ export function checkStory(story: GeneratedStory, constraints: StoryConstraints,
     detail: `wanted ${constraints.pageCount}, got ${story.pages.length}`
   });
 
-  // 4. Target grapheme density — the story actually teaches its unit.
-  const targetCount = countOccurrences(surfaces, constraints.targetGrapheme);
-  decisions.push({
-    check: 'target-density',
-    ok: targetCount >= TARGET_GRAPHEME_MIN_OCCURRENCES,
-    detail: `"${constraints.targetGrapheme}" x${targetCount} (min ${TARGET_GRAPHEME_MIN_OCCURRENCES})`
-  });
+  // 4 & 5. Teaching density — only meaningful when the child reads the text.
+  // A narrated story teaches vocabulary and ideas, not grapheme exposure, so
+  // holding it to a phonics quota only ever degraded the storytelling.
+  if (decodable) {
+    // 4. Target grapheme density — the story actually teaches its unit.
+    const targetCount = countOccurrences(surfaces, constraints.targetGrapheme);
+    decisions.push({
+      check: 'target-density',
+      ok: targetCount >= TARGET_GRAPHEME_MIN_OCCURRENCES,
+      detail: `"${constraints.targetGrapheme}" x${targetCount} (min ${TARGET_GRAPHEME_MIN_OCCURRENCES})`
+    });
 
-  // 5. Spaced-repetition density for every review unit.
-  const weakReviews = constraints.reviewGraphemes.filter(
-    (g) => countOccurrences(surfaces, g) < REVIEW_GRAPHEME_MIN_OCCURRENCES
-  );
-  decisions.push({
-    check: 'review-density',
-    ok: weakReviews.length === 0,
-    detail: weakReviews.length > 0 ? `under-exposed: ${weakReviews.join(', ')}` : undefined
-  });
+    // 5. Spaced-repetition density for every review unit.
+    const weakReviews = constraints.reviewGraphemes.filter(
+      (g) => countOccurrences(surfaces, g) < REVIEW_GRAPHEME_MIN_OCCURRENCES
+    );
+    decisions.push({
+      check: 'review-density',
+      ok: weakReviews.length === 0,
+      detail: weakReviews.length > 0 ? `under-exposed: ${weakReviews.join(', ')}` : undefined
+    });
+  }
 
   return decisions;
 }
@@ -279,7 +315,7 @@ export async function prefetchStory(input: ServeStoryInput): Promise<boolean> {
   if (already !== undefined) return already;
 
   const run = (async (): Promise<boolean> => {
-    const { providers, worldSeed, learnerModel, ageYears } = input;
+    const { providers, worldSeed, learnerModel, ageYears, decodable = true } = input;
     try {
       const constraints = buildStoryConstraints(learnerModel, worldSeed, ageYears);
       const ctx = validationContext(learnerModel, constraints);
@@ -287,9 +323,10 @@ export async function prefetchStory(input: ServeStoryInput): Promise<boolean> {
         constraints,
         level: generationLevel(learnerModel, constraints.targetGrapheme),
         promptVersion: PROMPT_VERSION,
-        taughtTrickyWords: learnerModel.taughtTrickyWords
+        taughtTrickyWords: learnerModel.taughtTrickyWords,
+        decodable
       });
-      if (!checkStory(raw, constraints, ctx).every((d) => d.ok)) return false;
+      if (!checkStory(raw, constraints, ctx, { decodable }).every((d) => d.ok)) return false;
       warmCache.set(childId, { candidate: raw, expiresAt: Date.now() + WARM_TTL_MS });
       return true;
     } catch {
@@ -305,7 +342,18 @@ export async function prefetchStory(input: ServeStoryInput): Promise<boolean> {
  * Serve the next story for a child — the full fail-closed pipeline.
  */
 export async function serveStory(input: ServeStoryInput): Promise<ServeStoryResult> {
-  const { prisma, providers, childId, worldSeed, learnerModel, ageYears, teach = true, pageCountOverride, dailyStoryBudget } = input;
+  const {
+    prisma,
+    providers,
+    childId,
+    worldSeed,
+    learnerModel,
+    ageYears,
+    teach = true,
+    pageCountOverride,
+    dailyStoryBudget,
+    decodable = true
+  } = input;
   const baseConstraints = buildStoryConstraints(learnerModel, worldSeed, ageYears);
   // Story Time passes a fixed, longer page count so the narrated book runs
   // ~2 minutes; the read-along keeps its adaptive, mastery-scaled length.
@@ -341,7 +389,7 @@ export async function serveStory(input: ServeStoryInput): Promise<ServeStoryResu
   }
   if (warm !== undefined) {
     if (warm.expiresAt > Date.now()) {
-      const checks = checkStory(warm.candidate, constraints, ctx);
+      const checks = checkStory(warm.candidate, constraints, ctx, { decodable });
       decisions.push(...checks.map((d) => ({ ...d, check: `warm-cache.${d.check}` })));
       if (checks.every((d) => d.ok)) {
         story = {
@@ -408,10 +456,11 @@ export async function serveStory(input: ServeStoryInput): Promise<ServeStoryResu
         level: generationLevel(learnerModel, constraints.targetGrapheme),
         promptVersion: PROMPT_VERSION,
         taughtTrickyWords: learnerModel.taughtTrickyWords,
+        decodable,
         // Child-facing: fail fast to the ladder rather than spin for 30s+.
         budgetMs: SERVE_GRACE_MS
       });
-      const checks = checkStory(raw, constraints, ctx);
+      const checks = checkStory(raw, constraints, ctx, { decodable });
       decisions.push(...checks.map((d) => ({ ...d, check: `generator.${d.check}` })));
 
       if (checks.every((d) => d.ok)) {
@@ -470,9 +519,10 @@ export async function serveStory(input: ServeStoryInput): Promise<ServeStoryResu
         // they live. The child's own level has none (503 in the wild).
         level: generationLevel(learnerModel, constraints.targetGrapheme),
         promptVersion: PROMPT_VERSION,
-        taughtTrickyWords: learnerModel.taughtTrickyWords
+        taughtTrickyWords: learnerModel.taughtTrickyWords,
+        decodable
       });
-      const checks = checkStory(raw, constraints, ctx); // paranoia: re-check
+      const checks = checkStory(raw, constraints, ctx, { decodable }); // paranoia: re-check
       if (!checks.every((d) => d.ok)) throw new Error('deterministic fallback failed its own checks');
       story = {
         ...raw,

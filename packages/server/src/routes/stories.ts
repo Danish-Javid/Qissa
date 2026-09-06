@@ -156,6 +156,12 @@ export async function storyRoutes(app: FastifyInstance): Promise<void> {
         // internally, so an age below the pedagogy band is handled gracefully.
         ageYears,
         teach: false, // receptive — never advance the learner model
+        // The child never READS a word here: the player narrates pictureTalk.
+        // Holding the prose to her taught graphemes bought nothing and cost
+        // the storytelling everything (level 1 is `s a t p i n` plus names,
+        // which produced titles like "Mina s"). Moderation still runs on
+        // every surface — only the phonics gate is lifted.
+        decodable: false,
         pageCountOverride: STORY_TIME_PAGES, // a longer book, so it runs ~2 min
         dailyStoryBudget: env.DAILY_STORY_BUDGET_PER_CHILD
       });

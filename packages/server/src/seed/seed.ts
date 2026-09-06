@@ -238,7 +238,7 @@ export async function seed(prisma: PrismaClient): Promise<void> {
         constraints,
         level: generationLevel(model, constraints.targetGrapheme),
         promptVersion: 'seed-1',
-        taughtTrickyWords: model.taughtTrickyWords
+        taughtTrickyWords: model.taughtTrickyWords, decodable: true
       });
       story = {
         ...generated,

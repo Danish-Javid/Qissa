@@ -39,6 +39,17 @@ export interface StoryGenerationRequest {
    *  self-validate against the SAME vocabulary the engine's gate uses;
    *  constraints.allowedTrickyWords alone lists only the NEW ones. */
   taughtTrickyWords: string[];
+  /**
+   * Must the page text be decodable by this child?
+   *
+   * True for the read-along, where the child sounds out every word. FALSE for
+   * Story Time, which is receptive: the companion narrates `pictureTalk` and
+   * the child never reads a line. Constraining that text bought nothing and
+   * cost everything — at level 1 the legal vocabulary is `s a t p i n` plus
+   * names, and asking for a coherent eight-page arc inside it produced titles
+   * like "Mina s". A story nobody reads should be a good story.
+   */
+  decodable: boolean;
   /** Optional per-call ceiling in milliseconds. The engine passes a SHORT
    *  budget on the child-facing synchronous path (fail fast to the ladder,
    *  never a spinner) and leaves the BACKGROUND prefetch on the provider's

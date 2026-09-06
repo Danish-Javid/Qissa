@@ -72,7 +72,8 @@ async function main(): Promise<void> {
         constraints,
         level: 1,
         promptVersion: PROMPT_VERSION,
-        taughtTrickyWords: model.taughtTrickyWords
+        taughtTrickyWords: model.taughtTrickyWords,
+        decodable: true
       });
       // Shape only: the engine's gates are what decide acceptability, and they
       // are already covered by the unit tests. This asks "did the vendor

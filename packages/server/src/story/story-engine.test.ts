@@ -364,6 +364,84 @@ describe('warm prefetch cache', () => {
   });
 });
 
+describe('narrated stories are not held to the reading gate', () => {
+  const constraints = {
+    childName: 'Mina',
+    ageYears: 5,
+    worldSeed: WORLD_SEED,
+    allowedGraphemes: ['s', 'a', 't', 'p', 'i', 'n'],
+    targetGrapheme: 'm',
+    reviewGraphemes: ['p'],
+    allowedTrickyWords: [],
+    theme: 'courage',
+    pageCount: 2
+  } satisfies StoryConstraints;
+
+  const ctx = { taughtGraphemes: ['s', 'a', 't', 'p', 'i', 'n', 'm'], taughtTrickyWords: ['mina'] };
+
+  // Exactly what Story Time wants and the read-along gate forbids: real
+  // words, real feelings, none of it decodable at level 1.
+  const narrated: GeneratedStory = {
+    title: 'The lantern by the river',
+    pages: [
+      {
+        text: 'Mina found a lantern.',
+        pictureTalk: 'Mina found an old brass lantern half-buried in the cool river sand.',
+        illustrationHint: 'a girl kneeling by a river holding a brass lantern at dusk'
+      },
+      {
+        text: 'She was brave.',
+        pictureTalk: 'Her hands were shaking, but she lifted it anyway. That is what brave feels like.',
+        illustrationHint: 'the same girl holding the lantern up, warm light on her face'
+      }
+    ],
+    choice: {
+      prompt: 'Should Mina keep the lantern or return it?',
+      options: ['Keep the lantern', 'Look for its owner'],
+      consequenceForFirst: 'She polished it until it shone.',
+      consequenceForSecond: 'She found the fisherman who had lost it.'
+    },
+    offlineTask: 'Ask your grown-up about something they were brave about.'
+  };
+
+  it('rejects this story for a reader — none of it is decodable', () => {
+    const decisions = checkStory(narrated, constraints, ctx, { decodable: true });
+    expect(decisions.find((d) => d.check === 'decodability')?.ok).toBe(false);
+  });
+
+  it('accepts the same story as narration', () => {
+    const decisions = checkStory(narrated, constraints, ctx, { decodable: false });
+    expect(decisions.every((d) => d.ok), JSON.stringify(decisions)).toBe(true);
+  });
+
+  it('drops only the reading checks, never moderation', () => {
+    const checks = checkStory(narrated, constraints, ctx, { decodable: false }).map((d) => d.check);
+    expect(checks).not.toContain('decodability');
+    expect(checks).not.toContain('target-density');
+    expect(checks).not.toContain('review-density');
+    // Safety and shape are not negotiable in either mode.
+    expect(checks).toContain('content-filter');
+    expect(checks).toContain('page-count');
+  });
+
+  it('still refuses unsafe narration', () => {
+    const unsafe: GeneratedStory = {
+      ...narrated,
+      pages: narrated.pages.map((page, i) =>
+        i === 0 ? { ...page, pictureTalk: 'The man had a knife and there was blood everywhere.' } : page
+      )
+    };
+    const decisions = checkStory(unsafe, constraints, ctx, { decodable: false });
+    expect(decisions.find((d) => d.check === 'content-filter')?.ok).toBe(false);
+  });
+
+  it('defaults to the STRICTER gate when the flag is omitted', () => {
+    // A caller that forgets the option must not silently get narration rules.
+    const decisions = checkStory(narrated, constraints, ctx);
+    expect(decisions.find((d) => d.check === 'decodability')?.ok).toBe(false);
+  });
+});
+
 describe('Story Time (receptive, teach=false)', () => {
   // Story Time is the COMMON listening+watching mode. It must reuse the exact
   // same safe pipeline (personalized, gated, persisted) but must NEVER fold
