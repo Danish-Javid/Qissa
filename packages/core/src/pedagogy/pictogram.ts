@@ -54,14 +54,18 @@ export const PICTOGRAMS: Record<string, string> = {
   road: '🛣️', shop: '🏪', street: '🏘️', town: '🏙️',
   // nature and weather
   day: '☀️', fern: '🌿', flower: '🌸', frost: '❄️', grass: '🌱', hay: '🌾',
-  moon: '🌙', moss: '🍀', mud: '🟤', night: '🌙', rain: '🌧️', sand: '🏖️',
+  moon: '🌙', moss: '🍀', night: '🌙', rain: '🌧️', sand: '🏖️',
   snow: '🌨️', star: '⭐', storm: '⛈️', sun: '🌞', wind: '💨',
   // vehicles
   boat: '⛵', bus: '🚌', car: '🚗', ship: '🚢', sled: '🛷', train: '🚂',
   van: '🚐',
   // small objects and misc
+  // NOTE: "mud" and "spot" are deliberately absent. Their obvious glyphs are a
+  // brown circle and a red circle -- flat blocks of colour, which is precisely
+  // the thing this module exists to stop showing children. They fall through
+  // to a scene glyph instead, which is at least a picture of something.
   coin: '🪙', dam: '🏞️', fin: '🐟', fur: '🧸', knot: '🪢', lap: '🧑',
-  picture: '🖼️', pit: '🕳️', ring: '💍', spot: '🔴', tin: '🥫', wax: '🕯️',
+  nap: '😴', pit: '🕳️', ring: '💍', tin: '🥫', wax: '🕯️',
   // actions a picture can actually show
   chew: '😋', clap: '👏', float: '🎈', glow: '✨', grab: '🤲', grow: '🌱',
   growl: '😾', hear: '👂', hiss: '🐍', hug: '🤗', jog: '🏃', jump: '🤸',
@@ -69,9 +73,14 @@ export const PICTOGRAMS: Record<string, string> = {
   sit: '🪑', skip: '🤸', slow: '🐢', spin: '🌀', stand: '🧍',
   stop: '🛑', swim: '🏊', swing: '🎠', think: '💭', wag: '🐕', wear: '👕',
   wish: '🌟',
-  // feelings and qualities with a clear face
-  glad: '😊', sad: '😢', fun: '🎉', dark: '🌑', hot: '🔥', warm: '☀️',
-  wet: '💧', big: '🐘', small: '🐭', old: '🧓', new: '✨'
+  // Feelings with a clear face. NOTE the absence of plain adjectives here --
+  // "warm", "big", "small", "new", "picture" and friends were deliberately
+  // REMOVED. Illustration hints are prose that begins with art boilerplate
+  // ("warm flat storybook scene: ..."), so an adjective in this table matches
+  // that boilerplate before it ever reaches the actual subject, and every
+  // picture in the app collapses to one glyph. An adjective has no referent to
+  // draw anyway: the picture should show the noun.
+  glad: '😊', sad: '😢'
 };
 
 /** True when this word has a real pictogram rather than a generic scene. */

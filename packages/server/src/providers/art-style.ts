@@ -33,3 +33,19 @@ export const ART_DIRECTION = [
 export function stylePrompt(hint: string): string {
   return `${hint}. ${ART_DIRECTION}`;
 }
+
+/**
+ * Cache-busting version for generated art.
+ *
+ * Every illustration is cached on disk and deliberately survives container
+ * rebuilds, so changing how art is produced does NOT change what is served —
+ * old files keep being returned forever. That is how the first pictogram fix
+ * shipped while children were still shown the previous generator's identical
+ * coloured blobs: the code was right and the cache was stale.
+ *
+ * Bump this whenever ART_DIRECTION, the pictogram table, or the placeholder
+ * renderer changes in a way that should alter existing pictures. It is part of
+ * every cache filename, so a bump retires the old files without anyone having
+ * to remember to clear a volume on the server.
+ */
+export const ART_CACHE_VERSION = 'v4';

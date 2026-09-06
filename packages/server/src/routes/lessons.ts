@@ -33,7 +33,7 @@ import path from 'node:path';
 import { z } from 'zod';
 import type { FastifyInstance } from 'fastify';
 import { ctx } from '../context.js';
-import { stylePrompt } from '../providers/art-style.js';
+import { ART_CACHE_VERSION, stylePrompt } from '../providers/art-style.js';
 import type { ImageResult } from '../providers/interfaces.js';
 import { audit } from '../safety/audit.js';
 import { denyNotFound, ownedChild, requireAuth } from './guards.js';
@@ -140,7 +140,7 @@ export async function lessonRoutes(app: FastifyInstance): Promise<void> {
     const hint = `a joyful celebration keepsake: ${child.name} beaming with pride, holding up a bright picture book, letters and sounds sparkling in the air around her, confetti and warm golden light, a happy bravo for learning to read`;
 
     const ext = providers.mode === 'mock' ? 'svg' : 'png';
-    const filePath = path.join(illustrationDir, `${child.id}-lesson-gift.${ext}`);
+    const filePath = path.join(illustrationDir, `${ART_CACHE_VERSION}-${child.id}-lesson-gift.${ext}`);
     try {
       const cached = await readFile(filePath);
       return reply.type(ext === 'svg' ? 'image/svg+xml' : 'image/png').send(cached);
@@ -183,7 +183,7 @@ export async function lessonRoutes(app: FastifyInstance): Promise<void> {
     if (!isPicturableWord(params.word)) return denyNotFound(reply);
 
     const ext = providers.mode === 'mock' ? 'svg' : 'png';
-    const filePath = path.join(illustrationDir, `word-${params.word}.${ext}`);
+    const filePath = path.join(illustrationDir, `${ART_CACHE_VERSION}-word-${params.word}.${ext}`);
     try {
       const cached = await readFile(filePath);
       return reply.type(ext === 'svg' ? 'image/svg+xml' : 'image/png').send(cached);
