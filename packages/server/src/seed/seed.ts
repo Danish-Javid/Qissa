@@ -13,6 +13,7 @@
  *
  * Run after migrations:  npm run seed
  */
+import { randomBytes } from 'node:crypto';
 import { hash } from '@node-rs/argon2';
 import { Prisma, type PrismaClient } from '@prisma/client';
 import {
@@ -108,6 +109,38 @@ function misread(word: string, context: string[], rng: () => number): string {
   return [swap, ...parts.slice(1)].join('');
 }
 
+/** The credential this repository published in its history. Rejected outright,
+ *  so a .env copied from an older README cannot silently reintroduce a password
+ *  that is now public on the internet. */
+const RETIRED_SEED_PASSWORD = 'change-me-before-demo';
+
+/**
+ * Resolve the demo parent's password.
+ *
+ * This repository is public, so a password defaulting in config.ts is a
+ * PUBLISHED credential for every deployment that follows the README's
+ * `cp .env.example .env` + `npm run seed` -- and the seeded parent also carries
+ * consentGivenAt, which is the flag that lets voice clips be retained. Empty
+ * (the shipped default) therefore generates a strong random password and prints
+ * it exactly once. An explicit value is honoured, but must clear the same
+ * 10-character floor the registration route enforces.
+ */
+function resolveSeedPassword(configured: string): { password: string; generated: boolean } {
+  if (configured === '') {
+    return { password: randomBytes(18).toString('base64url'), generated: true };
+  }
+  if (configured === RETIRED_SEED_PASSWORD) {
+    throw new Error(
+      'SEED_PARENT_PASSWORD is the value published in this repository\'s history. Choose a different\n' +
+        'password, or leave SEED_PARENT_PASSWORD empty to have a strong one generated.'
+    );
+  }
+  if (configured.length < 10) {
+    throw new Error('SEED_PARENT_PASSWORD must be at least 10 characters (the registration floor).');
+  }
+  return { password: configured, generated: false };
+}
+
 export async function seed(prisma: PrismaClient): Promise<void> {
   const env = loadEnv();
   const rng = makeRng(20260904); // hackathon date — the demo is a fixed point in time
@@ -123,10 +156,11 @@ export async function seed(prisma: PrismaClient): Promise<void> {
   // ---- Parent + consent (given the day before the first story). ----------
   const consentAt = sessionDate(0, now);
   consentAt.setDate(consentAt.getDate() - 1);
+  const seedCredential = resolveSeedPassword(env.SEED_PARENT_PASSWORD);
   const parent = await prisma.parent.create({
     data: {
       email: env.SEED_PARENT_EMAIL,
-      passwordHash: await hash(env.SEED_PARENT_PASSWORD),
+      passwordHash: await hash(seedCredential.password),
       consentGivenAt: consentAt
     }
   });
@@ -429,6 +463,14 @@ export async function seed(prisma: PrismaClient): Promise<void> {
       `${SESSION_COUNT} sessions · level ${model.currentLevel} · ` +
       `${model.taughtGraphemes.length} graphemes taught · ${model.vocabulary.length} words read`
   );
+  // Printed once, stored nowhere else: the alternative was a password committed
+  // to a public repository, which is what this replaces.
+  if (seedCredential.generated) {
+    console.log(
+      `\nDemo password (generated, shown once):\n  ${seedCredential.password}\n` +
+        'Set SEED_PARENT_PASSWORD to pin your own instead.\n'
+    );
+  }
 }
 
 // ---------------------------------------------------------------------------

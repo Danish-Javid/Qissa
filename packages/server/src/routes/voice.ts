@@ -11,6 +11,12 @@
  *  - raw audio is the request body's bytes — nothing is forwarded to any
  *    vendor except the configured recognizer;
  *  - the 30-day (configurable) deletion is by-creation-date, no exceptions.
+ *
+ * Abuse rules enforced here:
+ *  - inbound audio is validated as base64 and length-bounded before it reaches
+ *    a vendor or the disk;
+ *  - /api/tts carries a tighter rate ceiling than the global default, because
+ *    every phrase-cache miss is a PAID synthesis.
  */
 import { randomBytes } from 'node:crypto';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
@@ -43,6 +49,35 @@ const ClipSchema = z
 
 const AudioIdParams = z.object({ id: z.string().regex(/^[a-z0-9]{1,80}$/i) }).strict();
 
+/** Absolute decoded ceiling. MAX_AUDIO_BASE64 implies roughly 2.1 MB decoded;
+ *  this leaves headroom so a maximum-length legitimate clip is never rejected,
+ *  while staying well under the server's 4 MB bodyLimit. */
+const MAX_AUDIO_BYTES = 3 * 1024 * 1024;
+
+/** Per-minute ceiling on paid synthesis. The rationale lives on the /tts route. */
+const TTS_MAX_PER_MINUTE = 30;
+
+/**
+ * Decode and length-check client-supplied audio, or return null.
+ *
+ * `Buffer.from(x, 'base64')` NEVER throws on malformed input -- it silently
+ * discards characters outside the alphabet -- so the try/catch that used to wrap
+ * it guarded nothing, and arbitrary bytes reached both the recognizer and the
+ * disk. This validates the alphabet, rejects empty input, and bounds the decoded
+ * length.
+ *
+ * Deliberately NOT a container check: the browser's MediaRecorder is created
+ * without a mimeType (web/src/voice/capture.ts), so the bytes are whatever the
+ * browser defaults to -- WebM/Opus on Chromium, MP4 on Safari. Requiring a
+ * RIFF/WAVE magic here would reject every real recording a child makes.
+ */
+function decodeAudio(base64: string): Uint8Array | null {
+  if (!/^[A-Za-z0-9+/]*={0,2}$/.test(base64)) return null;
+  const buffer = Buffer.from(base64, 'base64');
+  if (buffer.length === 0 || buffer.length > MAX_AUDIO_BYTES) return null;
+  return new Uint8Array(buffer);
+}
+
 /** Pre-synthesized phrase cache (plan §Phase 2): companion phrases repeat
  *  constantly ("You got it — keep going."), so synthesizing once and
  *  replaying keeps the hot path under the latency budget. */
@@ -58,10 +93,8 @@ export async function voiceRoutes(app: FastifyInstance): Promise<void> {
     const body = parseBody(AsrSchema, request.body, reply);
     if (body === null) return;
 
-    let audio: Uint8Array;
-    try {
-      audio = new Uint8Array(Buffer.from(body.audioBase64, 'base64'));
-    } catch {
+    const audio = decodeAudio(body.audioBase64);
+    if (audio === null) {
       return reply.code(400).send({ error: 'invalid audio encoding' });
     }
 
@@ -81,7 +114,23 @@ export async function voiceRoutes(app: FastifyInstance): Promise<void> {
     }
   });
 
-  app.post('/tts', { preHandler: requireAuth(app) }, async (request, reply) => {
+  // Tighter than the global 600/min, and the reason is money rather than abuse.
+  // Every phrase-cache MISS is a paid vendor synthesis, and the cache is bounded
+  // (PHRASE_CACHE_MAX) with oldest-evicted -- so a caller submitting enough
+  // distinct phrases evicts the legitimate companion phrases and turns the cache
+  // into an amplifier for vendor spend. This bounds the RATE.
+  //
+  // It is deliberately not a daily budget. A durable per-parent cap needs a
+  // parentId on the audit ledger, which the schema does not carry, and an
+  // in-memory counter would reset on every restart -- exactly the drift the
+  // story budget was designed out (see story-engine.ts, "Counting rows is
+  // deliberate over a running counter").
+  const ttsOptions = {
+    preHandler: requireAuth(app),
+    config: { rateLimit: { max: TTS_MAX_PER_MINUTE, timeWindow: '1 minute' } }
+  };
+
+  app.post('/tts', ttsOptions, async (request, reply) => {
     const body = parseBody(TtsSchema, request.body, reply);
     if (body === null) return;
 
@@ -131,10 +180,8 @@ export async function voiceRoutes(app: FastifyInstance): Promise<void> {
     });
     if (session === null) return denyNotFound(reply);
 
-    let audio: Uint8Array;
-    try {
-      audio = new Uint8Array(Buffer.from(body.audioBase64, 'base64'));
-    } catch {
+    const audio = decodeAudio(body.audioBase64);
+    if (audio === null) {
       return reply.code(400).send({ error: 'invalid audio encoding' });
     }
 

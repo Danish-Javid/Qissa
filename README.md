@@ -21,7 +21,11 @@ Optional demo history (six weeks of plausible sessions, digest-ready):
 
 ```bash
 docker compose exec app node packages/server/dist/seed/seed.js
-# sign in with SEED_PARENT_EMAIL / SEED_PARENT_PASSWORD from .env
+# Sign in with SEED_PARENT_EMAIL from .env and the password the seed prints.
+# SEED_PARENT_PASSWORD ships EMPTY on purpose: this repository is public, so a
+# committed default is a published credential. Leave it empty and the seed
+# generates a strong random password and prints it exactly once; set it to pin
+# your own (10+ characters, the same floor registration enforces).
 ```
 
 ---
@@ -111,8 +115,10 @@ refuses to start on a bad value.
 | `PORT` | `3000` | HTTP listener |
 | `LOG_LEVEL` | `info` | Pino log level |
 | `DATABASE_URL` | compose value | PostgreSQL 16 (compose overrides this to host `db`) |
-| `COOKIE_SECURE` | `false` | `true` only behind HTTPS — browsers drop Secure cookies on plain HTTP |
+| `COOKIE_SECURE` | `false` | `true` only behind HTTPS — browsers drop Secure cookies on plain HTTP. **Mandatory in production:** the server refuses to boot with `NODE_ENV=production` and this `false` |
 | `CORS_ORIGINS` | *(empty)* | Comma-separated allowlist; empty = same-origin only |
+| `TRUSTED_PROXY_NETS` | *(empty)* | Comma-separated IPs/CIDRs allowed to set `X-Forwarded-For`; empty = trust nobody. The rate limiter buckets by client IP, so trusting every hop lets a caller spoof a fresh header per request and empty its own bucket |
+| `DEMO_SURFACE` | *(derived)* | `POST /api/demo/*` + `GET /api/metrics-demo`. Empty derives from `NODE_ENV`: on for development and test, **off in production**, where the routes are not registered at all |
 | `PROVIDER_MODE` | `mock` | `mock`, `alibaba` or `azure` — flips every provider at once |
 | `DASHSCOPE_API_KEY` | *(empty)* | Alibaba Cloud Model Studio key; unlocks `alibaba` providers |
 | `DASHSCOPE_BASE_URL` | `https://dashscope-intl.aliyuncs.com` | Regional endpoint (intl = correct for Pakistan) |
@@ -135,8 +141,8 @@ refuses to start on a bad value.
 | `AUDIO_RETENTION_DAYS` | `30` | Raw child audio deleted after N days (0 = immediate) |
 | `SESSION_CAP_MINUTES` | `15` | Server-enforced session cap |
 | `DAILY_STORY_BUDGET_PER_CHILD` | `40` | Vendor generations per child per rolling 24h; reaching it serves the vetted ladder instead of erroring (`0` = never call the generator) |
-| `SEED_PARENT_EMAIL` | `demo@qissa.app` | Demo account email |
-| `SEED_PARENT_PASSWORD` | `change-me-before-demo` | Demo account password — change before the stage |
+| `SEED_PARENT_EMAIL` | `demo@qissa.app` | Demo account email (not a secret) |
+| `SEED_PARENT_PASSWORD` | *(empty)* | **No default, by design.** Empty makes `npm run seed` generate a strong random password and print it once; an explicit value must be 10+ characters. The previous literal default was published in this repository's history and is now rejected outright |
 
 Before demoing against a real vendor, run `npm run verify:providers`. It makes
 the smallest real call to each of the four capabilities in the configured mode
@@ -176,7 +182,9 @@ pedagogy gate is untouched, only the picture changes.
 **Demo control** creates a child and generates stories through the *real*
 pipeline — nothing on the demo screen is a fixture, so the pipeline view stays
 truthful. Reset is scoped to the caller's own `isDemo` rows, so it cannot touch
-a real child's history.
+a real child's history. Seeding passes the same per-child daily budget the child
+track uses, and the whole surface is absent from a production build unless
+`DEMO_SURFACE=true` — see the security posture below.
 
 ## Security posture
 
@@ -194,7 +202,12 @@ a real child's history.
 3. **Input validation:** Zod schema with `reject-unknown-fields` (`.strict()`) on
    every route; params, bodies and headers all validated.
 4. **Headers & limits:** @fastify/helmet (strict CSP), @fastify/rate-limit, CORS
-   allowlist (default same-origin), a 4 MB body cap.
+   allowlist (default same-origin), a 4 MB body cap. `X-Forwarded-For` is trusted
+   only from `TRUSTED_PROXY_NETS` — the limiter buckets by client IP, so blanket
+   proxy trust would let any caller spoof its way into a fresh bucket on every
+   request and defeat both the global ceiling and the credential cap.
+   `/api/tts` carries its own 30/min ceiling, because every phrase-cache miss is
+   a paid vendor synthesis and the cache is bounded with oldest-evicted.
 5. **Fail-closed content pipeline:** prompt constraints → generator
    self-validation → decodability validator → content moderation → shape checks.
    Any failure rejects the story; the engine serves the hand-written cache, then a
@@ -214,11 +227,28 @@ a real child's history.
    before any recording.
 9. **Append-only audit log:** every accepted/rejected story, cap, escalation and
    progression decision is written to `audit_log` — the digest and the
-   `/api/metrics-demo` honesty card read straight from it.
+   `/api/metrics-demo` honesty card read straight from it. That card reports
+   *platform-wide* aggregates, so it exists only on the demo surface below.
 10. **Docker:** multi-stage, `node:24-alpine`, non-root runtime, no secrets in
     layers (`.dockerignore` excludes `.env`), pinned lockfile (`npm ci`),
     HEALTHCHECK on `/api/health`, database unpublished to the host.
-11. **Known accepted advisory:** `npm audit` flags `deepmerge-ts` (via the Prisma
+11. **The stage surface is off in production.** `POST /api/demo/*` and
+    `GET /api/metrics-demo` exist to make a live demo reliable, and both are
+    wrong on a public deployment: seeding drives paid vendor generations, and
+    the metrics card reports platform-wide aggregates to any signed-in parent.
+    Under `NODE_ENV=production` they are not registered at all, so there is
+    nothing to defend rather than a route that must be defended correctly.
+    Related: `serveStory` treats an omitted budget as *unlimited*, and re-seeding
+    mints a fresh `childId` — hence a fresh budget — on every call, so seeding
+    passes `DAILY_STORY_BUDGET_PER_CHILD` explicitly.
+12. **Inbound audio is validated, not assumed.** `Buffer.from(x, 'base64')` never
+    throws on malformed input — it silently discards characters outside the
+    alphabet — so the decoder validates the alphabet, rejects empty input and
+    bounds the length before anything reaches a vendor or the disk. Container
+    magic is deliberately *not* checked: the browser's `MediaRecorder` is created
+    without a `mimeType`, so the bytes are WebM/Opus on Chromium and MP4 on
+    Safari, and a RIFF/WAVE requirement would reject every real recording.
+13. **Known accepted advisory:** `npm audit` flags `deepmerge-ts` (via the Prisma
     **CLI** only). The CLI runs at build time and for migrations, never in the
     request path; `@prisma/client` (runtime) does not use it. No patched Prisma
     6.x exists, and the "fix" would downgrade the CLI to a version mismatched

@@ -7,12 +7,19 @@ services:
   app:
     build: .
     ports:
+      # LOCAL DEVELOPMENT ONLY. Do not publish this port on an internet-reachable
+      # host: there is no TLS and no reverse proxy in front of an app that
+      # handles children's voice data. Use docker-compose.prod.yml (Caddy as the
+      # sole ingress) for anything public.
       - "3000:3000"
     env_file:
       - .env
     environment:
       # Override .env: within the compose network PostgreSQL is reachable as "db".
-      DATABASE_URL: postgresql://qissa:qissa@db:5432/qissa?schema=public
+      # The password comes from the environment with a local-only fallback, so
+      # this file carries no literal credential and a real deployment cannot
+      # inherit one by copy-paste. Set POSTGRES_PASSWORD for anything shared.
+      DATABASE_URL: postgresql://qissa:${POSTGRES_PASSWORD:-qissa}@db:5432/qissa?schema=public
     volumes:
       # Child audio clips + generated illustrations persist across rebuilds,
       # and the retention job prunes them on schedule.
@@ -25,7 +32,7 @@ services:
     image: postgres:16-alpine
     environment:
       POSTGRES_USER: qissa
-      POSTGRES_PASSWORD: qissa
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-qissa}
       POSTGRES_DB: qissa
     volumes:
       - qissa-db:/var/lib/postgresql/data

@@ -20,6 +20,13 @@
  * Safety: reset is scoped twice over — to the signed-in parent AND to rows
  * carrying `isDemo`. A parent who uses their real account for the demo cannot
  * lose their real child's history to a mistimed tap.
+ *
+ * Spend: seeding passes the SAME per-child daily budget the child track uses.
+ * serveStory treats an omitted budget as unlimited, and because seeding deletes
+ * and recreates the child every call -- a fresh childId, so a fresh budget --
+ * an omitted budget here would let any signed-in caller loop this route for
+ * unbounded paid vendor generations. These routes are additionally absent from
+ * a production build unless DEMO_SURFACE=true (see config.demoSurfaceEnabled).
  */
 import { z } from 'zod';
 import type { FastifyInstance } from 'fastify';
@@ -101,7 +108,9 @@ export async function demoRoutes(app: FastifyInstance): Promise<void> {
         childId: child.id,
         worldSeed: DEMO_CHILD.worldSeed,
         learnerModel: model,
-        ageYears
+        ageYears,
+        // Never unlimited -- see the "Spend" note in this module's docstring.
+        dailyStoryBudget: env.DAILY_STORY_BUDGET_PER_CHILD
       });
       model = result.updatedModel;
       titles.push(result.story.title);

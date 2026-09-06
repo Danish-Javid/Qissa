@@ -28,6 +28,26 @@ const EnvSchema = z.object({
     .string()
     .default('')
     .transform((v) => v.split(',').map((s) => s.trim()).filter(Boolean)),
+  // Comma-separated IPs/CIDRs permitted to set X-Forwarded-For. Empty = trust
+  // nobody, so the client IP is the socket's own address.
+  //
+  // This is a security control, not a convenience. @fastify/rate-limit keys its
+  // buckets on the client IP, and Fastify's blanket `trustProxy: true` takes
+  // that IP from the leftmost X-Forwarded-For -- which is caller-controlled.
+  // Trusting every hop lets an attacker send a fresh header per request and
+  // walk straight through both the global ceiling and the 10/min credential
+  // cap. Behind a reverse proxy, list the proxy's address or the compose
+  // subnet, and nothing broader.
+  TRUSTED_PROXY_NETS: z
+    .string()
+    .default('')
+    .transform((v) => v.split(',').map((s) => s.trim()).filter(Boolean)),
+  // Stage/judging surfaces: POST /api/demo/* and GET /api/metrics-demo. Both
+  // exist to make a live demo reliable and both are wrong on a public
+  // deployment -- seed drives paid vendor generations, and metrics-demo reports
+  // platform-wide aggregates to any signed-in parent. Empty derives the safe
+  // answer from NODE_ENV; see demoSurfaceEnabled().
+  DEMO_SURFACE: z.enum(['true', 'false', '']).default(''),
 
   PROVIDER_MODE: z.enum(['mock', 'alibaba', 'azure']).default('mock'),
   DASHSCOPE_API_KEY: z.string().default(''),
@@ -83,7 +103,11 @@ const EnvSchema = z.object({
   DAILY_STORY_BUDGET_PER_CHILD: z.coerce.number().int().min(0).max(500).default(40),
 
   SEED_PARENT_EMAIL: z.string().default('demo@qissa.app'),
-  SEED_PARENT_PASSWORD: z.string().default('change-me-before-demo')
+  // Deliberately NO default. This repository is public, so any password written
+  // here is a published credential for every deployment that follows the
+  // README's `cp .env.example .env` + `npm run seed`. Empty makes seed.ts
+  // generate a strong random password and print it exactly once.
+  SEED_PARENT_PASSWORD: z.string().default('')
 });
 
 export type Env = z.infer<typeof EnvSchema>;
@@ -99,10 +123,36 @@ export function loadEnv(source: NodeJS.ProcessEnv = process.env): Env {
       .join('\n');
     throw new Error(`Invalid environment configuration:\n${issues}`);
   }
-  return parsed.data;
+  const env = parsed.data;
+
+  // A production boot with COOKIE_SECURE=false is a silent and total
+  // compromise: the session cookie is the ONLY authentication factor, and
+  // without the Secure flag a browser sends it over plain HTTP. app.ts also
+  // drops HSTS in exactly that state, so nothing would ever upgrade the
+  // connection. Refuse to start rather than serve an app that looks healthy
+  // and is not -- a crash here is diagnosable, a leaked cookie is not.
+  if (env.NODE_ENV === 'production' && !env.COOKIE_SECURE) {
+    throw new Error(
+      'Invalid environment configuration:\n' +
+        '  - COOKIE_SECURE: must be "true" when NODE_ENV=production, or session cookies are sent over plain HTTP'
+    );
+  }
+  return env;
 }
 
 /** True when Secure cookies + strict CORS defaults apply. */
 export function isProduction(env: Env): boolean {
   return env.NODE_ENV === 'production';
+}
+
+/**
+ * Whether the stage/judging surface (demo seed + reset, metrics card) exists at
+ * all. An explicit DEMO_SURFACE wins; otherwise it is derived, so the default is
+ * ON for local development and for the test suite (which never sets NODE_ENV)
+ * and OFF for production. When off the routes are never registered, so there is
+ * nothing to defend rather than a route that must be defended correctly.
+ */
+export function demoSurfaceEnabled(env: Env): boolean {
+  if (env.DEMO_SURFACE !== '') return env.DEMO_SURFACE === 'true';
+  return env.NODE_ENV !== 'production';
 }

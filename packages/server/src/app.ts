@@ -4,9 +4,13 @@
  *
  * Security stack registered here (plan §"Security — non-negotiable"):
  *   @fastify/helmet       strict CSP, no sniff, no referrer leakage
- *   @fastify/rate-limit   global ceiling + harder cap on /api/auth
+ *   @fastify/rate-limit   global ceiling + harder cap on /api/auth and /api/tts
  *   @fastify/cors         explicit allowlist, credentials for cookies
  *   @fastify/cookie       HttpOnly session cookies
+ *
+ * X-Forwarded-For is trusted only from TRUSTED_PROXY_NETS, because the rate
+ * limiter keys on the client IP and a spoofable header empties every bucket.
+ * The demo/pitch surface is registered only when demoSurfaceEnabled() says so.
  *
  * Same-origin serving means the child's browser talks to exactly one
  * origin; there is no third-party script, font, or telemetry on the page.
@@ -20,6 +24,7 @@ import fastifyHelmet from '@fastify/helmet';
 import fastifyRateLimit from '@fastify/rate-limit';
 import fastifyStatic from '@fastify/static';
 import type { AppContext } from './context.js';
+import { demoSurfaceEnabled } from './config.js';
 import { authRoutes } from './routes/auth.js';
 import { childrenRoutes } from './routes/children.js';
 import { demoRoutes } from './routes/demo.js';
@@ -32,11 +37,18 @@ import { storyRoutes } from './routes/stories.js';
 import { voiceRoutes } from './routes/voice.js';
 
 export async function buildApp(appCtx: AppContext): Promise<FastifyInstance> {
+  // Trust X-Forwarded-For ONLY from explicitly listed proxies; empty means the
+  // client IP is the socket's own address. The blanket `NODE_ENV === 'production'`
+  // this replaces trusted every hop, which lets a caller send a fresh
+  // X-Forwarded-For per request and reset its own rate-limit bucket -- defeating
+  // both the global ceiling and the credential cap whenever the app port is
+  // reachable without a proxy in front of it (a published compose port, say).
+  const trustedProxies = appCtx.env.TRUSTED_PROXY_NETS;
   const app = Fastify({
     logger: { level: appCtx.env.LOG_LEVEL },
     // The PWA posts JSON only; capping the body blunts resource-exhaustion.
     bodyLimit: 4 * 1024 * 1024,
-    trustProxy: appCtx.env.NODE_ENV === 'production' // behind the Docker bridge
+    trustProxy: trustedProxies.length > 0 ? trustedProxies : false
   });
 
   // Decorate before any plugin registers so guards can reach the context.
@@ -84,7 +96,6 @@ export async function buildApp(appCtx: AppContext): Promise<FastifyInstance> {
     // because registering the plugin globally does not narrow a prefix.
     await api.register(authRoutes, { prefix: '/auth' });
     await api.register(childrenRoutes, { prefix: '/children' });
-    await api.register(demoRoutes, { prefix: '/demo' });
     await api.register(earlyRoutes, { prefix: '/early' });
     await api.register(lessonRoutes, { prefix: '/lessons' });
     await api.register(storyRoutes, { prefix: '/stories' });
@@ -92,7 +103,17 @@ export async function buildApp(appCtx: AppContext): Promise<FastifyInstance> {
     await api.register(digestRoutes, { prefix: '/children' });
     await api.register(voiceRoutes, { prefix: '/' });
     await api.register(healthRoutes);
-    await api.register(metricsRoutes);
+
+    // Stage/judging surfaces -- one-tap demo seed/reset and the pitch card.
+    // Registered only when the demo surface is on (default: off in production),
+    // so a public build has NO route here at all and the /api not-found handler
+    // answers 404. Seeding drives paid vendor generations and the metrics card
+    // reports platform-wide aggregates to any signed-in parent; neither belongs
+    // on an internet-reachable deployment.
+    if (demoSurfaceEnabled(appCtx.env)) {
+      await api.register(demoRoutes, { prefix: '/demo' });
+      await api.register(metricsRoutes);
+    }
   }, { prefix: '/api' });
 
   // ------------------------------------------------- PWA static + SPA fallback

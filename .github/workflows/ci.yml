@@ -61,6 +61,14 @@ jobs:
     name: Docker image builds
     runs-on: ubuntu-latest
     timeout-minutes: 25
+    # This repository is public, so an outside fork PR would otherwise spend 25
+    # minutes of runner time on an image build -- and the same again on the
+    # compose smoke test below -- for anyone who cares to open one. Same-
+    # repository events only. (Security-wise `pull_request` is already the right
+    # trigger: forks receive no secrets. This is about compute, not credentials.)
+    if: >-
+      github.event_name != 'pull_request' ||
+      github.event.pull_request.head.repo.full_name == github.repository
     steps:
       - uses: actions/checkout@v4
 
@@ -82,6 +90,11 @@ jobs:
     name: Compose smoke test
     runs-on: ubuntu-latest
     timeout-minutes: 25
+    # See the docker job: heavy, and not something an outside fork should be
+    # able to trigger on demand.
+    if: >-
+      github.event_name != 'pull_request' ||
+      github.event.pull_request.head.repo.full_name == github.repository
     steps:
       - uses: actions/checkout@v4
 
