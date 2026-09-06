@@ -13,18 +13,25 @@
 import { randomUUID } from 'node:crypto';
 import { rm } from 'node:fs/promises';
 import { afterAll, describe, expect, it, vi } from 'vitest';
-import type { IImageGenerator, ImageResult } from '../providers/interfaces.js';
-import { ensurePageArt, illustrationDir, storyArtStatus, warmStoryArt } from './art.js';
+import type { IImageGenerator, ImageOptions, ImageResult } from '../providers/interfaces.js';
+import { ensureHeroReference, ensurePageArt, heroReferencePath, illustrationDir, storyArtStatus, warmStoryArt } from './art.js';
 
 /** A generator that records every call and can be held open on demand. */
-function fakeImages(delayMs = 0): IImageGenerator & { calls: string[] } {
+function fakeImages(
+  delayMs = 0,
+  supportsReferences = false
+): IImageGenerator & { calls: string[]; refCalls: (Uint8Array[] | undefined)[] } {
   const calls: string[] = [];
+  const refCalls: (Uint8Array[] | undefined)[] = [];
   return {
     name: 'fake',
     model: 'fake',
+    supportsReferences,
     calls,
-    generateImage: vi.fn(async (hint: string): Promise<ImageResult> => {
+    refCalls,
+    generateImage: vi.fn(async (hint: string, _subject?: string, options?: ImageOptions): Promise<ImageResult> => {
       calls.push(hint);
+      refCalls.push(options?.references);
       if (delayMs > 0) await new Promise((resolve) => setTimeout(resolve, delayMs));
       return { image: new Uint8Array([1, 2, 3]), mimeType: 'image/png', costMicroUsd: 1 };
     })
@@ -109,5 +116,76 @@ describe('ensurePageArt', () => {
 
     expect(images.calls).toHaveLength(1);
     expect(again.mimeType).toBe('image/png');
+  });
+});
+
+describe('hero reference (character consistency)', () => {
+  it('is not drawn at all when the provider cannot use one', async () => {
+    const images = fakeImages(0, false);
+    const ref = await ensureHeroReference({ childId: storyId(), heroName: 'Ayla', images });
+    expect(ref).toBeNull();
+    expect(images.calls, 'must not pay for a reference nothing can consume').toHaveLength(0);
+  });
+
+  it('is drawn once and reused', async () => {
+    const id = storyId();
+    const images = fakeImages(0, true);
+    const first = await ensureHeroReference({ childId: id, heroName: 'Ayla', images });
+    const second = await ensureHeroReference({ childId: id, heroName: 'Ayla', images });
+
+    expect(first).not.toBeNull();
+    expect(second).toEqual(first);
+    expect(images.calls, 'a cached hero must not be redrawn').toHaveLength(1);
+    await rm(heroReferencePath(id), { force: true });
+  });
+
+  it('anchors every page of a story on the hero', async () => {
+    const id = storyId();
+    const images = fakeImages(0, true);
+    await warmStoryArt({
+      storyId: id,
+      pages: pages(4),
+      images,
+      lowBandwidth: false,
+      mock: false,
+      hero: { childId: id, heroName: 'Ayla' }
+    });
+
+    // One hero + four pages.
+    expect(images.calls).toHaveLength(5);
+    const pageRefs = images.refCalls.slice(1);
+    expect(pageRefs).toHaveLength(4);
+    for (const refs of pageRefs) {
+      expect(refs, 'every page must carry the identity anchor').toHaveLength(1);
+    }
+    await rm(heroReferencePath(id), { force: true });
+  });
+
+  it('still draws the book when the hero cannot be produced', async () => {
+    const id = storyId();
+    const images: IImageGenerator & { calls: string[] } = {
+      name: 'flaky',
+      model: 'flaky',
+      supportsReferences: true,
+      calls: [],
+      generateImage: vi.fn(async (hint: string): Promise<ImageResult> => {
+        images.calls.push(hint);
+        // Only the character sheet fails; pages must carry on unanchored.
+        if (hint.includes('character reference')) throw new Error('vendor blip');
+        return { image: new Uint8Array([9]), mimeType: 'image/png', costMicroUsd: 1 };
+      })
+    };
+
+    await warmStoryArt({
+      storyId: id,
+      pages: pages(3),
+      images,
+      lowBandwidth: false,
+      mock: false,
+      hero: { childId: id, heroName: 'Ayla' }
+    });
+
+    const status = await storyArtStatus(id, 3, { lowBandwidth: false, mock: false });
+    expect(status, 'a missing hero costs consistency, never the story').toEqual({ ready: 3, total: 3 });
   });
 });

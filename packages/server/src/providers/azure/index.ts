@@ -26,6 +26,7 @@ import type {
   ISpeechRecognizer,
   ISpeechSynthesizer,
   IStoryGenerator,
+  ImageOptions,
   ImageResult,
   RecognitionResult,
   RecognizeOptions,
@@ -226,6 +227,20 @@ const FLUX_PATHS: Record<string, string> = {
   'FLUX-1.1-pro': 'flux-pro-1.1'
 };
 
+/**
+ * FLUX models that accept reference images for identity conditioning.
+ *
+ * FLUX.2 takes up to eight, and Kontext is built around editing a given
+ * image; the older 1.1 endpoint is text-only. Getting this wrong is not
+ * cosmetic — sending `input_image` to a model that does not expect it is a
+ * 400 mid-story, so the capability is declared per model rather than assumed
+ * from the family name.
+ */
+const FLUX_REFERENCE_MODELS = new Set(['FLUX.2-pro', 'FLUX.2-flex', 'FLUX.1-Kontext-pro']);
+
+/** How many references the API accepts (input_image plus input_image_2..8). */
+const MAX_FLUX_REFERENCES = 8;
+
 export class AzureFluxImageGenerator implements IImageGenerator {
   readonly name = 'azure-flux';
 
@@ -234,9 +249,30 @@ export class AzureFluxImageGenerator implements IImageGenerator {
     readonly model: string
   ) {}
 
+  get supportsReferences(): boolean {
+    return FLUX_REFERENCE_MODELS.has(this.model);
+  }
+
+  /**
+   * Reference images as the BFL API wants them: `input_image`, then
+   * `input_image_2` upward, each a base64-encoded PNG.
+   *
+   * Silently empty when the model cannot use them, so a caller that passes a
+   * reference to a text-only deployment gets a plain image rather than a 400
+   * in the middle of a child's story.
+   */
+  private referenceFields(references?: Uint8Array[]): Record<string, string> {
+    if (!this.supportsReferences || references === undefined || references.length === 0) return {};
+    const fields: Record<string, string> = {};
+    references.slice(0, MAX_FLUX_REFERENCES).forEach((reference, i) => {
+      fields[i === 0 ? 'input_image' : `input_image_${i + 1}`] = Buffer.from(reference).toString('base64');
+    });
+    return fields;
+  }
+
   // `subject` is for the offline pictogram renderer only; a real model gets
   // the full styled prompt and needs nothing else.
-  async generateImage(hint: string): Promise<ImageResult> {
+  async generateImage(hint: string, _subject?: string, options?: ImageOptions): Promise<ImageResult> {
     const path = FLUX_PATHS[this.model];
     if (!path) throw new Error(`Unknown FLUX model "${this.model}" (see FLUX_PATHS)`);
     // Foundry resources usually share one key pair across services; fall back
@@ -258,7 +294,12 @@ export class AzureFluxImageGenerator implements IImageGenerator {
           width: 1024,
           height: 1024,
           output_format: 'png',
-          num_images: 1
+          num_images: 1,
+          // Identity conditioning: the API takes `input_image`, then
+          // `input_image_2`…`input_image_8`. Without these, every page is an
+          // independent draw and the hero's face changes between page one and
+          // page two of the same story.
+          ...this.referenceFields(options?.references)
         }),
         // FLUX.2 [pro] runs slower than the turbo models it replaces.
         timeoutMs: 90_000

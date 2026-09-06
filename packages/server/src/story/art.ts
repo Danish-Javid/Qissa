@@ -75,6 +75,8 @@ export interface EnsurePageArtInput extends PageArtKey {
   hint: string;
   /** The plain subject, for the offline pictogram renderer. */
   subject: string;
+  /** Identity anchors — normally the child's hero reference. */
+  references?: Uint8Array[];
 }
 
 /**
@@ -102,7 +104,9 @@ export async function ensurePageArt(
   if (pending === undefined) {
     // The scene hint is merged with the house art direction so every provider
     // draws in the same warm world.
-    pending = input.images.generateImage(stylePrompt(input.hint), input.subject);
+    pending = input.images.generateImage(stylePrompt(input.hint), input.subject, {
+      references: input.references
+    });
     pendingImages.set(filePath, pending);
     pending.catch(() => undefined).finally(() => pendingImages.delete(filePath));
   }
@@ -114,6 +118,74 @@ export async function ensurePageArt(
 export interface StoryArtPage {
   hint: string;
   subject: string;
+}
+
+/**
+ * The hero reference — one drawing of this child's character, kept forever.
+ *
+ * Every page used to be an independent text-to-image call, so the hero's face,
+ * hair and clothes changed between page one and page two of the SAME story.
+ * FLUX.2 accepts reference images, so we draw the character once and condition
+ * every later page on it.
+ *
+ * Always on the ORIGINAL reference, never the previous page: chaining
+ * page-to-page edits accumulates drift, so by page eight the child is looking
+ * at someone else. One fixed anchor keeps every page equidistant from canon.
+ *
+ * Keyed by child, not by story — the point is that she is the same girl
+ * tomorrow night, which is the whole premise of a persistent story world.
+ */
+export function heroReferencePath(childId: string): string {
+  return path.join(illustrationDir, `${ART_CACHE_VERSION}-hero-${childId}.png`);
+}
+
+/** A character sheet prompt: the person alone, plainly lit, no scene. */
+function heroPrompt(hero: { name: string; petName?: string; petKind?: string }): string {
+  return stylePrompt(
+    `a full-body character reference of ${hero.name}, a young child, standing facing forward with a warm friendly smile, ` +
+      'plain soft background, clear simple clothing, the whole figure visible, no other characters, no scenery'
+  );
+}
+
+export interface HeroReferenceInput {
+  childId: string;
+  heroName: string;
+  images: IImageGenerator;
+}
+
+/**
+ * The hero reference bytes, drawing them once if needed.
+ *
+ * Returns null rather than throwing when the provider cannot condition on
+ * references, or when the drawing fails: a missing reference costs
+ * consistency, and a story without pictures costs the session. Never trade
+ * the second for the first.
+ */
+export async function ensureHeroReference(input: HeroReferenceInput): Promise<Uint8Array | null> {
+  if (!input.images.supportsReferences) return null;
+  const filePath = heroReferencePath(input.childId);
+
+  try {
+    return new Uint8Array(await readFile(filePath));
+  } catch {
+    // Not drawn yet.
+  }
+
+  let pending = pendingImages.get(filePath);
+  if (pending === undefined) {
+    pending = input.images.generateImage(heroPrompt({ name: input.heroName }), input.heroName);
+    pendingImages.set(filePath, pending);
+    pending.catch(() => undefined).finally(() => pendingImages.delete(filePath));
+  }
+
+  try {
+    const result = await pending;
+    await mkdir(illustrationDir, { recursive: true }).catch(() => undefined);
+    await writeFile(filePath, result.image).catch(() => undefined);
+    return result.image;
+  } catch {
+    return null;
+  }
 }
 
 /**
@@ -146,8 +218,21 @@ export async function warmStoryArt(input: {
   images: IImageGenerator;
   lowBandwidth: boolean;
   mock: boolean;
+  /** Identity anchor for every page. Omit for art with no recurring character. */
+  hero?: { childId: string; heroName: string };
 }): Promise<void> {
   await mkdir(illustrationDir, { recursive: true });
+
+  // Draw the hero BEFORE the pages, and serially: the pages all condition on
+  // it, so starting them first would race the anchor they need. It is drawn
+  // once per child and cached forever, so this costs one image on the first
+  // story and nothing after.
+  const references =
+    input.hero === undefined
+      ? undefined
+      : ((ref) => (ref === null ? undefined : [ref]))(
+          await ensureHeroReference({ ...input.hero, images: input.images })
+        );
 
   const queue = input.pages.map((page, pageIndex) => ({ ...page, pageIndex }));
   const worker = async (): Promise<void> => {
@@ -161,7 +246,8 @@ export async function warmStoryArt(input: {
         mock: input.mock,
         images: input.images,
         hint: next.hint,
-        subject: next.subject
+        subject: next.subject,
+        references
       }).catch(() => undefined);
     }
   };

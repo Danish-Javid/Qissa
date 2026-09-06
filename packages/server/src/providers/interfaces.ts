@@ -118,9 +118,29 @@ export interface ImageResult {
   costMicroUsd: number;
 }
 
+export interface ImageOptions {
+  /**
+   * Reference images the model should keep faithful to — the hero's face and
+   * clothes, so page four's child is page one's child.
+   *
+   * Providers that cannot condition on references MUST ignore this rather
+   * than fail; check `supportsReferences` before paying to produce one.
+   */
+  references?: Uint8Array[];
+}
+
 export interface IImageGenerator {
   readonly name: string;
   readonly model: string;
+  /**
+   * Can this provider hold a character's identity across images?
+   *
+   * Interchangeable providers do NOT mean interchangeable conditioning
+   * features. FLUX.2 accepts reference images; the offline renderer draws
+   * deterministic shapes and needs none. Callers use this to decide whether
+   * producing a reference is worth a vendor call at all.
+   */
+  readonly supportsReferences: boolean;
   /**
    * `hint` is the full styled prompt sent to a vendor. `subject` is the plain
    * thing being drawn ("apple", or a story page's raw scene line), which the
@@ -129,7 +149,7 @@ export interface IImageGenerator {
    * "small", "picture-book"), so matching against it would resolve every
    * image to the same glyph. Vendors ignore `subject`.
    */
-  generateImage(hint: string, subject?: string): Promise<ImageResult>;
+  generateImage(hint: string, subject?: string, options?: ImageOptions): Promise<ImageResult>;
 }
 
 /** Everything the app needs from the vendor layer, wired at boot. */

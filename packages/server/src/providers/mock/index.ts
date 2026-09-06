@@ -468,6 +468,11 @@ export class MockImageGenerator implements IImageGenerator {
    * pictogram. Deterministic throughout — the on-disk art cache and the
    * offline path both require that the same hint always yields the same bytes.
    */
+  /** The offline renderer draws deterministic shapes from the subject word;
+   *  there is no model to condition, and consistency is already guaranteed
+   *  because the same subject always yields the same picture. */
+  readonly supportsReferences = false;
+
   async generateImage(hint: string, subject?: string): Promise<ImageResult> {
     // Prefer the caller's explicit subject; fall back to the hint only when
     // there isn't one (nothing in the tree currently omits it).

@@ -196,6 +196,11 @@ export class WanxImageGenerator implements IImageGenerator {
 
   // `subject` is for the offline pictogram renderer only; a real model gets
   // the full styled prompt and needs nothing else.
+  /** Wanx is called here as text-to-image; the configured endpoint takes no
+   *  reference image, so identity conditioning is unavailable in this mode.
+   *  Declared rather than assumed — see IImageGenerator.supportsReferences. */
+  readonly supportsReferences = false;
+
   async generateImage(hint: string): Promise<ImageResult> {
     const submitted = await dashScopeFetch(this.env, '/api/v1/services/aigc/text2image/image-synthesis', {
       method: 'POST',

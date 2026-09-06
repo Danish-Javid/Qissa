@@ -16,7 +16,7 @@ import { ageInYears, ctx, rawAgeInYears } from '../context.js';
 import { ART_CACHE_VERSION, stylePrompt } from '../providers/art-style.js';
 import { MockImageGenerator } from '../providers/mock/index.js';
 import type { ImageResult } from '../providers/interfaces.js';
-import { ensurePageArt, illustrationDir, storyArtStatus, warmStoryArt } from '../story/art.js';
+import { ensureHeroReference, ensurePageArt, illustrationDir, storyArtStatus, warmStoryArt } from '../story/art.js';
 import { prefetchStory, serveStory } from '../story/story-engine.js';
 import { denyNotFound, ownedChild, requireAuth } from './guards.js';
 import { parseBody, parseParams } from './validate.js';
@@ -180,7 +180,10 @@ export async function storyRoutes(app: FastifyInstance): Promise<void> {
         })),
         images: storyImages,
         lowBandwidth: storyImages !== providers.images,
-        mock: providers.mode === 'mock'
+        mock: providers.mode === 'mock',
+        // One drawing of this child's hero, reused across every page and
+        // every future story, so she is recognisably the same girl.
+        hero: { childId: child.id, heroName: (child.worldSeed as unknown as WorldSeed).heroName }
       }).catch(() => undefined);
 
       return reply.code(201).send({
@@ -218,7 +221,7 @@ export async function storyRoutes(app: FastifyInstance): Promise<void> {
 
     const story = await prisma.story.findUnique({
       where: { id: params.id },
-      include: { child: { select: { parentId: true, settings: true } } }
+      include: { child: { select: { parentId: true, settings: true, worldSeed: true } } }
     });
     if (story === null || story.child.parentId !== request.auth.parent.id) return denyNotFound(reply);
 
@@ -247,6 +250,13 @@ export async function storyRoutes(app: FastifyInstance): Promise<void> {
     try {
       // Shared with the server-side warmer, so a page the warmer is already
       // drawing is JOINED rather than generated a second time.
+      // Same anchor the warmer uses: a page drawn here (warm missed it, or a
+      // vendor blip) must show the same child as the pages around it.
+      const heroRef = await ensureHeroReference({
+        childId: story.childId,
+        heroName: (story.child.worldSeed as unknown as WorldSeed).heroName,
+        images
+      });
       const result = await ensurePageArt({
         storyId: story.id,
         pageIndex: params.page,
@@ -254,7 +264,8 @@ export async function storyRoutes(app: FastifyInstance): Promise<void> {
         mock: providers.mode === 'mock',
         images,
         hint,
-        subject
+        subject,
+        references: heroRef === null ? undefined : [heroRef]
       });
       return reply.type(result.mimeType).send(Buffer.from(result.image));
     } catch {
