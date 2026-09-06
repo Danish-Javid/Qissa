@@ -54,14 +54,18 @@ export const PICTOGRAMS: Record<string, string> = {
   road: '🛣️', shop: '🏪', street: '🏘️', town: '🏙️',
   // nature and weather
   day: '☀️', fern: '🌿', flower: '🌸', frost: '❄️', grass: '🌱', hay: '🌾',
-  moon: '🌙', moss: '🍀', mud: '🟤', night: '🌙', rain: '🌧️', sand: '🏖️',
+  moon: '🌙', moss: '🍀', night: '🌙', rain: '🌧️', sand: '🏖️',
   snow: '🌨️', star: '⭐', storm: '⛈️', sun: '🌞', wind: '💨',
   // vehicles
   boat: '⛵', bus: '🚌', car: '🚗', ship: '🚢', sled: '🛷', train: '🚂',
   van: '🚐',
   // small objects and misc
+  // NOTE: "mud" and "spot" are deliberately absent. Their obvious glyphs are a
+  // brown circle and a red circle -- flat blocks of colour, which is precisely
+  // the thing this module exists to stop showing children. They fall through
+  // to a scene glyph instead, which is at least a picture of something.
   coin: '🪙', dam: '🏞️', fin: '🐟', fur: '🧸', knot: '🪢', lap: '🧑',
-  nap: '😴', pit: '🕳️', ring: '💍', spot: '🔴', tin: '🥫', wax: '🕯️',
+  nap: '😴', pit: '🕳️', ring: '💍', tin: '🥫', wax: '🕯️',
   // actions a picture can actually show
   chew: '😋', clap: '👏', float: '🎈', glow: '✨', grab: '🤲', grow: '🌱',
   growl: '😾', hear: '👂', hiss: '🐍', hug: '🤗', jog: '🏃', jump: '🤸',

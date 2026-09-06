@@ -48,4 +48,4 @@ export function stylePrompt(hint: string): string {
  * every cache filename, so a bump retires the old files without anyone having
  * to remember to clear a volume on the server.
  */
-export const ART_CACHE_VERSION = 'v3';
+export const ART_CACHE_VERSION = 'v4';
