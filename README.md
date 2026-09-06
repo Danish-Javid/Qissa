@@ -224,6 +224,50 @@ a real child's history.
     6.x exists, and the "fix" would downgrade the CLI to a version mismatched
     with the client. Revisit when Prisma patches.
 
+## Deploying to qissa.online
+
+One VPS, one command. `docker-compose.prod.yml` adds Caddy in front of the app
+and keeps everything else off the public internet.
+
+```bash
+# On the server (Ubuntu 24.04, 2 GB RAM is enough for the mock providers)
+git clone https://github.com/Danish-Javid/Qissa.git && cd Qissa
+cp .env.production.example .env.production
+openssl rand -base64 24            # paste into POSTGRES_PASSWORD
+nano .env.production               # set POSTGRES_PASSWORD + the seed account
+docker compose -f docker-compose.prod.yml up --build -d
+```
+
+Point DNS at the box **before** the first start — Caddy needs to answer an
+HTTP-01 challenge on port 80 to get the certificate:
+
+| Type | Name | Value |
+|---|---|---|
+| `A` | `@` | your server's IPv4 |
+| `A` | `www` | your server's IPv4 |
+
+Then `docker compose -f docker-compose.prod.yml logs -f caddy` should show a
+certificate obtained for `qissa.online`, and the site is live over HTTPS.
+
+Three things that are easy to get wrong:
+
+1. **`COOKIE_SECURE=true` is mandatory.** The compose file sets it. A browser
+   silently drops a `Secure` cookie over plain HTTP, so getting this wrong
+   does not warn — it just logs every parent out.
+2. **Do not publish the app's port.** Caddy is the only ingress; exposing
+   `3000` would let anyone reach the app over plain HTTP by IP and bypass TLS.
+3. **Change `SEED_PARENT_EMAIL` / `SEED_PARENT_PASSWORD`.** The development
+   defaults are published in this repository.
+
+Updating a running deployment:
+
+```bash
+git pull && docker compose -f docker-compose.prod.yml up --build -d
+```
+
+Migrations apply automatically at container start (`prisma migrate deploy`),
+and the `qissa-data` / `qissa-db` volumes survive rebuilds.
+
 ## Development (without Docker)
 
 ```bash

@@ -151,7 +151,9 @@ export async function lessonRoutes(app: FastifyInstance): Promise<void> {
     try {
       let pending = pendingImages.get(filePath);
       if (pending === undefined) {
-        pending = providers.images.generateImage(stylePrompt(hint));
+        // A gift is a celebration, not a noun — say so rather than letting the
+        // renderer pick whichever concrete word happens to appear in the prose.
+        pending = providers.images.generateImage(stylePrompt(hint), 'gift');
         pendingImages.set(filePath, pending);
         pending.catch(() => undefined).finally(() => pendingImages.delete(filePath));
       }
@@ -193,7 +195,9 @@ export async function lessonRoutes(app: FastifyInstance): Promise<void> {
       let pending = pendingImages.get(filePath);
       if (pending === undefined) {
         const hint = `one clear idea a small child can point at: ${params.word} — a warm, friendly picture-book scene, soft rounded shapes, bright gentle colours, no text, no letters`;
-        pending = providers.images.generateImage(stylePrompt(hint));
+        // The exact curriculum word is the subject; never make the offline
+        // renderer infer it from prose that also carries the style block.
+        pending = providers.images.generateImage(stylePrompt(hint), params.word);
         pendingImages.set(filePath, pending);
         pending.catch(() => undefined).finally(() => pendingImages.delete(filePath));
       }

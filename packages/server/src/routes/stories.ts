@@ -230,7 +230,9 @@ export async function storyRoutes(app: FastifyInstance): Promise<void> {
       if (pending === undefined) {
         // The scene hint is merged with the house art direction (researched
         // kid-loved style) so every provider draws in the same warm world.
-        pending = images.generateImage(stylePrompt(hint));
+        // The page's own scene line is the subject — NOT the styled prompt,
+        // whose house-style block carries its own concrete words.
+        pending = images.generateImage(stylePrompt(hint), hint);
         pendingImages.set(filePath, pending);
         pending.catch(() => undefined).finally(() => pendingImages.delete(filePath));
       }
@@ -284,7 +286,7 @@ export async function storyRoutes(app: FastifyInstance): Promise<void> {
     try {
       let pending = pendingImages.get(filePath);
       if (pending === undefined) {
-        pending = images.generateImage(stylePrompt(hint));
+        pending = images.generateImage(stylePrompt(hint), 'gift');
         pendingImages.set(filePath, pending);
         pending.catch(() => undefined).finally(() => pendingImages.delete(filePath));
       }

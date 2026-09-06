@@ -234,6 +234,8 @@ export class AzureFluxImageGenerator implements IImageGenerator {
     readonly model: string
   ) {}
 
+  // `subject` is for the offline pictogram renderer only; a real model gets
+  // the full styled prompt and needs nothing else.
   async generateImage(hint: string): Promise<ImageResult> {
     const path = FLUX_PATHS[this.model];
     if (!path) throw new Error(`Unknown FLUX model "${this.model}" (see FLUX_PATHS)`);

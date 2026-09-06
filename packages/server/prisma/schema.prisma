@@ -28,6 +28,16 @@ model Parent {
   passwordHash String
   // Set once, at consent time (NFR-3). Shown back in the digest screen.
   consentGivenAt DateTime?
+  // Who the grown-up is. Collected at registration so the account has a real
+  // person behind it and the digest can address them by name.
+  displayName  String?
+  // The PARENT's date of birth, not the child's. Registration refuses under
+  // 18s. This is an age GATE, not identity verification -- see auth.ts.
+  birthDate    DateTime?
+  // When they affirmed they are the child's parent or legal guardian. A
+  // timestamp rather than a boolean: this is the record of an attestation,
+  // and "when" is the part that matters if it is ever questioned.
+  guardianConfirmedAt DateTime?
   // Parent-layer language: 'en' | 'ur' (FR-J). Stored on the parent, not the
   // child, because it is the ADULT who reads the dashboard and the digest --
   // the child track stays English either way.

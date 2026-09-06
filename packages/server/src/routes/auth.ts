@@ -31,6 +31,39 @@ const CredentialsSchema = z
   })
   .strict();
 
+/** Youngest age that may hold an account, and the oldest plausible one. */
+const MIN_PARENT_AGE = 18;
+const MAX_PARENT_AGE = 120;
+
+/**
+ * Registration asks who the grown-up is.
+ *
+ * What this DOES: keeps children from casually creating their own accounts,
+ * records an explicit guardian attestation with a timestamp, and gives the
+ * digest a real name to address.
+ *
+ * What this does NOT do: verify identity or parenthood. A self-reported date
+ * of birth is an age GATE, not proof — anyone willing to type a different year
+ * gets past it. Real verification means documents or a payment rail, neither of
+ * which belongs in a children's reading app. Saying so plainly here so nobody
+ * later mistakes this for a control it is not.
+ */
+const RegistrationSchema = CredentialsSchema.extend({
+  fullName: z.string().trim().min(2).max(80),
+  birthDate: z.iso.date(),
+  // Literal true, not boolean: an unchecked box must fail validation rather
+  // than quietly record a `false` attestation.
+  isGuardian: z.literal(true)
+}).strict();
+
+/** Whole years between a date and now, UTC, leap-safe. */
+function ageInYears(birthDate: Date, at = new Date()): number {
+  let age = at.getUTCFullYear() - birthDate.getUTCFullYear();
+  const monthDelta = at.getUTCMonth() - birthDate.getUTCMonth();
+  if (monthDelta < 0 || (monthDelta === 0 && at.getUTCDate() < birthDate.getUTCDate())) age -= 1;
+  return age;
+}
+
 /**
  * The "harder cap" the module docstring promises. The global ceiling (600/min)
  * is sized for a child tapping through a story; it is far too generous for
@@ -68,9 +101,20 @@ export async function authRoutes(app: FastifyInstance): Promise<void> {
   void decoyHash();
 
   app.post('/register', CREDENTIAL_RATE_LIMIT, async (request, reply) => {
-    const body = parseBody(CredentialsSchema, request.body, reply);
+    const body = parseBody(RegistrationSchema, request.body, reply);
     if (body === null) return;
-    const { email, password } = body;
+    const { email, password, fullName } = body;
+
+    const birthDate = new Date(`${body.birthDate}T00:00:00.000Z`);
+    const age = ageInYears(birthDate);
+    if (age < MIN_PARENT_AGE || age > MAX_PARENT_AGE) {
+      // Stated plainly rather than as a generic validation error: a parent who
+      // mistyped a year needs to know which field is wrong. There is no
+      // enumeration risk here -- nothing about an existing account leaks.
+      return reply.code(422).send({
+        error: `Accounts are for grown-ups: the date of birth must be at least ${MIN_PARENT_AGE} years ago.`
+      });
+    }
 
     const existing = await prisma.parent.findUnique({ where: { email } });
     if (existing !== null) {
@@ -80,7 +124,15 @@ export async function authRoutes(app: FastifyInstance): Promise<void> {
     }
 
     const passwordHash = await hash(password);
-    const parent = await prisma.parent.create({ data: { email, passwordHash } });
+    const parent = await prisma.parent.create({
+      data: {
+        email,
+        passwordHash,
+        displayName: fullName,
+        birthDate,
+        guardianConfirmedAt: new Date()
+      }
+    });
     const session = await createSession(prisma, parent.id, request.headers['user-agent']);
     setSessionCookie(reply, env, session.sessionId, session.expiresAt);
     return reply.code(201).send({ email: parent.email, csrfToken: session.csrfToken });
@@ -121,6 +173,7 @@ export async function authRoutes(app: FastifyInstance): Promise<void> {
     // holds. See web/src/App.tsx + web/src/api/client.ts (auto-adopt).
     return {
       email: parent.email,
+      displayName: parent.displayName,
       consentGivenAt: parent.consentGivenAt,
       locale: parent.locale,
       csrfToken: session.csrfToken

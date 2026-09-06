@@ -9,6 +9,7 @@ coverage/
 .env
 .env.*
 !.env.example
+!.env.production.example
 
 # Runtime data: audio clips, generated illustrations, SQLite scratch files.
 # Audio retention is enforced server-side; nothing should ever live in git.

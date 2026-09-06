@@ -1,0 +1,39 @@
+# Caddy — TLS terminator and the only thing exposed to the internet.
+#
+# Caddy is here rather than nginx for one reason: it obtains and renews a
+# Let's Encrypt certificate for qissa.online automatically, with no cron, no
+# certbot and no manual renewal to forget the week after a hackathon. That
+# matters because COOKIE_SECURE=true is mandatory in production, and a browser
+# silently DROPS a Secure cookie over plain HTTP — an expired certificate would
+# not merely warn, it would log every parent out and look like a broken app.
+#
+# The app container is never published to the host (see docker-compose.prod.yml);
+# it is reachable only on the compose network, so this is the sole ingress.
+
+{
+	# Replace before the first deploy: Let's Encrypt uses this to warn about
+	# expiry problems. An invalid address does not block issuance.
+	email admin@qissa.online
+}
+
+qissa.online, www.qissa.online {
+	encode zstd gzip
+
+	# Security headers are set by the app itself (@fastify/helmet: CSP,
+	# frame-ancestors, referrer policy). Caddy adds only HSTS, which must come
+	# from the TLS terminator because it is a statement about the origin, not
+	# about any one response. 180 days, no preload — preload is a one-way door
+	# and should be a deliberate decision later, not a hackathon default.
+	header {
+		Strict-Transport-Security "max-age=15552000; includeSubDomains"
+		-Server
+	}
+
+	reverse_proxy app:3000 {
+		# The app trusts X-Forwarded-* only when NODE_ENV=production, and
+		# Caddy sets them. Without this the rate limiter would see every
+		# request as coming from the proxy's single IP and throttle all
+		# parents together.
+		header_up X-Forwarded-Host {host}
+	}
+}

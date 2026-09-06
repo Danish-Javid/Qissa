@@ -18,6 +18,7 @@ import { api } from '../api/client.js';
 import type { ChildSummary, MeResponse } from '../api/types.js';
 import { LanguageToggle } from '../i18n/LanguageToggle.js';
 import { ParentPage } from './ParentPage.js';
+import { Buddy } from '../child/Buddy.js';
 
 /** The primer scope — what a Qissa story teaches besides letters. Each
  *  line says HOW honestly (picture-walk talk / art / home mission), never
@@ -79,7 +80,12 @@ export function Dashboard() {
     <ParentPage className="mx-auto max-w-4xl space-y-6 p-6">
       <header className="flex flex-wrap items-center justify-between gap-3 rounded-3xl bg-leaf px-6 py-5 text-white shadow">
         <div className="flex items-center gap-4">
-          <img src="/landing/buddy.png" alt="" className="h-14 w-14 rounded-2xl bg-white/20 p-1" />
+          {/* Inline SVG, not the 877 KB landing PNG. That PNG is outside the
+              service worker's precache, so a flaky or offline load left this
+              slot showing a broken-image glyph next to the app's own name. */}
+          <span className="flex h-14 w-14 items-center justify-center rounded-2xl bg-white/20 p-1">
+            <Buddy mood="happy" size={44} />
+          </span>
           <div>
             <h1 className="font-story text-2xl font-bold">Qissa</h1>
             <p className="text-sm text-white/85">Your child's living primer — {me?.email ?? '…'}</p>
