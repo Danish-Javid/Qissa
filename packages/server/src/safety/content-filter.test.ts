@@ -36,7 +36,11 @@ describe('filterText', () => {
   });
 
   it('collects every fired category in one pass', () => {
-    const verdict = filterText('a monster told him to buy it');
+    // "buy it" used to fire commerce-pressure here. It no longer does, and
+    // deliberately: bare 'buy' rejected genuine stories. The category is now
+    // about actual pressure, so this uses actual pressure — the property under
+    // test is that MULTIPLE categories are collected, not which words fire.
+    const verdict = filterText('a monster told him to subscribe');
     expect(verdict.ok).toBe(false);
     expect(new Set(verdict.reasons)).toEqual(new Set(['fear-horror', 'commerce-pressure']));
   });
@@ -51,5 +55,37 @@ describe('filterAll', () => {
     const verdict = filterAll(['the sun is warm', 'a knife lay there']);
     expect(verdict.ok).toBe(false);
     expect(verdict.hits).toContain('knife');
+  });
+});
+
+describe('commerce-pressure targets pressure, not vocabulary', () => {
+  // Regression: bare 'buy'/'money'/'pay'/'price' rejected genuine stories.
+  // Once the narrated prompt produced real prose, every Story Time story was
+  // blocked and the child got a mock template — a safety rule that fires on
+  // innocent words does not make the product safer, it makes the good path
+  // unreachable. The curriculum's own life-skills strand teaches money.
+  it('allows a story that simply mentions money', () => {
+    for (const line of [
+      'Ayla had saved three coins in a small tin.',
+      'Rami wanted to buy bread for his mother.',
+      'The price of a mango was one coin.',
+      'She would pay the baker tomorrow.'
+    ]) {
+      expect(filterText(line).ok, line).toBe(true);
+    }
+  });
+
+  it('still blocks actual commercial pressure', () => {
+    for (const line of [
+      'Shop now for more stories!',
+      'Ask your parents to buy the full version.',
+      'Subscribe to unlock this page.',
+      'Enter a credit card to continue.',
+      'Limited time offer — upgrade now!'
+    ]) {
+      const verdict = filterText(line);
+      expect(verdict.ok, line).toBe(false);
+      expect(verdict.reasons).toContain('commerce-pressure');
+    }
   });
 });

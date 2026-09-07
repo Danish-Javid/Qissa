@@ -92,6 +92,21 @@ export interface ServeStoryInput {
    * Safety gates are unaffected — moderation runs on every surface regardless.
    */
   decodable?: boolean;
+  /**
+   * Ceiling for the child-facing generation call, in ms.
+   *
+   * Default is SERVE_GRACE_MS — short, because the read-along child is waiting
+   * on a tap and a spinner is worse than a vetted cached story.
+   *
+   * Story Time passes a GENEROUS budget instead, and the default nearly ruined
+   * it: gpt-5.5 takes 13–17s measured, the 9s grace aborted every single call,
+   * and every story the running app served came back
+   * `deterministic-fallback / mock-template` — titles like "Ayla sips a tip".
+   * The narrated-prompt work was real and no child would ever have seen it.
+   * Story Time already holds a readiness gate while its art is drawn, so there
+   * is no tap to protect; waiting for a good story costs nothing there.
+   */
+  generationBudgetMs?: number;
 }
 
 export interface ServeStoryResult {
@@ -387,7 +402,8 @@ export async function serveStory(input: ServeStoryInput): Promise<ServeStoryResu
     teach = true,
     pageCountOverride,
     dailyStoryBudget,
-    decodable = true
+    decodable = true,
+    generationBudgetMs = SERVE_GRACE_MS
   } = input;
   const baseConstraints = buildStoryConstraints(learnerModel, worldSeed, ageYears);
   // Story Time passes a fixed, longer page count so the narrated book runs
@@ -501,7 +517,7 @@ export async function serveStory(input: ServeStoryInput): Promise<ServeStoryResu
         decodable,
         lexicon: decodable ? plan.lexicon : undefined,
         // Child-facing: fail fast to the ladder rather than spin for 30s+.
-        budgetMs: SERVE_GRACE_MS
+        budgetMs: generationBudgetMs
       });
       const checks = checkStory(raw, planned, ctx, { decodable });
       decisions.push(...checks.map((d) => ({ ...d, check: `generator.${d.check}` })));

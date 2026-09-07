@@ -35,8 +35,31 @@ const BLOCKED: BlockCategory[] = [
     words: ['hurt myself', 'hurt yourself', 'hate myself', 'hate you', 'nobody loves', 'go away forever']
   },
   {
+    // The point of this category is that the PRODUCT must never pressure a
+    // child to spend — advertising language, upsells, dark patterns.
+    //
+    // It used to list bare 'buy', 'money', 'pay' and 'price', which are
+    // ordinary words a bedtime story legitimately uses, and the curriculum's
+    // own life-skills strand explicitly teaches money ("the hero has three
+    // coins and must choose"). Once the narrated prompt started producing
+    // real prose, this rejected genuine stories: a story about a child in
+    // Lahore saving up was blocked as commercial pressure, and the child got
+    // a mock template instead. Safety rules that fire on innocent words do
+    // not make a product safer; they make the good path unreachable.
     label: 'commerce-pressure',
-    words: ['buy', 'shop now', 'money', 'pay', 'price', 'free gift card', 'subscribe']
+    words: [
+      'shop now',
+      'buy now',
+      'order now',
+      'subscribe',
+      'gift card',
+      'credit card',
+      'in-app purchase',
+      'limited time offer',
+      'discount code',
+      'upgrade now',
+      'ask your parents to buy'
+    ]
   },
   {
     label: 'injection-attempts',

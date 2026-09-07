@@ -163,6 +163,11 @@ export async function storyRoutes(app: FastifyInstance): Promise<void> {
         // every surface — only the phonics gate is lifted.
         decodable: false,
         pageCountOverride: STORY_TIME_PAGES, // a longer book, so it runs ~2 min
+        // Generous: the player already waits behind a readiness gate while the
+        // art is drawn, so there is no tap to protect here. The default 9s
+        // grace aborted gpt-5.5 (13–17s measured) on EVERY call, which is why
+        // every story this app served was the mock template.
+        generationBudgetMs: env.AZURE_STORY_TIMEOUT_MS,
         dailyStoryBudget: env.DAILY_STORY_BUDGET_PER_CHILD
       });
       // Draw the WHOLE book now, four pages at a time, rather than leaving the
@@ -184,7 +189,21 @@ export async function storyRoutes(app: FastifyInstance): Promise<void> {
         // One drawing of this child's hero, reused across every page and
         // every future story, so she is recognisably the same girl.
         hero: { childId: child.id, heroName: (child.worldSeed as unknown as WorldSeed).heroName }
-      }).catch(() => undefined);
+      })
+        .then((warm) => {
+          // Log what actually happened. A page that fails silently shows up
+          // only as a readiness count that never reaches total, which is
+          // indistinguishable from "still drawing" — so say which page and why.
+          if (warm.failures.length > 0) {
+            request.log.warn(
+              { storyId: result.storyId, drawn: warm.drawn, total: warm.total, failures: warm.failures },
+              'story art incomplete'
+            );
+          }
+        })
+        .catch((error: unknown) => {
+          request.log.warn({ storyId: result.storyId, error: String(error) }, 'story art warm failed');
+        });
 
       return reply.code(201).send({
         storyId: result.storyId,
