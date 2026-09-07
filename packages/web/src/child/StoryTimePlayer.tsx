@@ -366,10 +366,24 @@ export function StoryTimePlayer({ childId, mockMode, pacing, onDone }: Props) {
           <button
             type="button"
             onClick={advance}
-            className="pop-in w-full max-w-2xl overflow-hidden rounded-3xl bg-white/75 shadow-xl transition active:scale-[0.99]"
+            /*
+             * Square, as large as the device allows, never cropped.
+             *
+             * This was `h-64 w-full object-cover` on a 1024x1024 source: a
+             * fixed 256px-tall box with cover, so roughly 60% of every
+             * illustration was cropped away — the child saw a letterboxed
+             * slice of a picture drawn for her. The art is square, so the
+             * frame is square too.
+             *
+             * max-w-[min(42rem,62vh)] is the orientation trick: because the
+             * box is square, capping its WIDTH by viewport height also caps
+             * its height, so it fills a portrait tablet's width and still fits
+             * inside a landscape phone without scrolling.
+             */
+            className="pop-in aspect-square w-full max-w-[min(42rem,62vh)] overflow-hidden rounded-3xl bg-white/75 shadow-xl transition active:scale-[0.99]"
             aria-label="Next page"
           >
-            <div className="relative">
+            <div className="relative h-full w-full">
               {!artLoaded && artOk && (
                 <div className="absolute inset-0 flex items-center justify-center text-5xl" aria-hidden>
                   🎨
@@ -380,7 +394,7 @@ export function StoryTimePlayer({ childId, mockMode, pacing, onDone }: Props) {
                   key={pageIndex}
                   src={illustrationUrl}
                   alt=""
-                  className="h-64 w-full object-cover sm:h-80"
+                  className="h-full w-full object-cover"
                   onLoad={() => {
                     artResolvedRef.current = true;
                     setArtLoaded(true);
@@ -391,7 +405,7 @@ export function StoryTimePlayer({ childId, mockMode, pacing, onDone }: Props) {
                   }}
                 />
               ) : (
-                <div className="flex h-64 items-center justify-center text-6xl sm:h-80" aria-hidden>
+                <div className="flex h-full w-full items-center justify-center text-6xl" aria-hidden>
                   🖼️
                 </div>
               )}

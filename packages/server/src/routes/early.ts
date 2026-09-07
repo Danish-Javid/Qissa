@@ -22,6 +22,7 @@ import type { FastifyInstance } from 'fastify';
 import { ctx } from '../context.js';
 import { buildDeck, EARLY_ART_HINTS, WORD_CARDS, VIGNETTES, type EarlyHistory } from '../early/catalog.js';
 import { ART_CACHE_VERSION, stylePrompt } from '../providers/art-style.js';
+import { generateWithRetry } from '../story/art.js';
 import type { ImageResult } from '../providers/interfaces.js';
 import { audit } from '../safety/audit.js';
 import { denyNotFound, ownedChild, requireAuth } from './guards.js';
@@ -99,6 +100,39 @@ export async function earlyRoutes(app: FastifyInstance): Promise<void> {
     await audit(prisma, { event: 'early.session', childId: child.id, detail: { run } });
 
     const deck = buildDeck(child.id, history, new Date(), run);
+
+    // Draw this run's pictures NOW, the way Story Time draws its book, rather
+    // than leaving the client's <img> tags to trigger generation one at a time
+    // while a two-year-old is being asked "where is the cow?".
+    //
+    // Fire-and-forget: the deck returns immediately and the emoji stands in
+    // until each picture lands. The catalog is family-independent and cached
+    // on disk, so after the first run for a given card this costs nothing.
+    const artIds = [...deck.words.map((c) => `word-${c.id}`), `vig-${deck.vignette.id}`];
+    void Promise.all(
+      artIds.map(async (id) => {
+        const hint = Object.hasOwn(EARLY_ART_HINTS, id) ? (EARLY_ART_HINTS[id] as string) : null;
+        if (hint === null) return;
+        const ext = providers.mode === 'mock' ? 'svg' : 'png';
+        const filePath = path.join(earlyArtDir, `${ART_CACHE_VERSION}-${id}.${ext}`);
+        try {
+          await readFile(filePath);
+          return; // already drawn, for every family, forever
+        } catch {
+          // Not cached — draw it below.
+        }
+        const subject = id.startsWith('word-') ? id.slice('word-'.length) : hint;
+        try {
+          const result = await generateWithRetry(providers.images, stylePrompt(hint), subject);
+          await writeFile(filePath, result.image).catch(() => undefined);
+        } catch (error) {
+          // A missing picture degrades that card to its emoji, never fails the
+          // run — but it must not vanish from the logs the way it used to.
+          request.log.warn({ artId: id, error: String(error) }, 'early art warm failed');
+        }
+      })
+    ).catch(() => undefined);
+
     return {
       words: deck.words.map((c) => ({
         id: c.id,
@@ -156,7 +190,10 @@ export async function earlyRoutes(app: FastifyInstance): Promise<void> {
         // puppy wagging its tail", which the offline renderer matched on
         // "tail". It happened to draw a dog; it just as easily would not have.
         const subject = params.id.startsWith('word-') ? params.id.slice('word-'.length) : hint;
-        pending = providers.images.generateImage(stylePrompt(hint), subject);
+        // Shared with Story Time: global concurrency ceiling, bounded retry
+        // and the vendor's own Retry-After. This route used to call the vendor
+        // directly, so a 429 lost the picture with no retry and no log.
+        pending = generateWithRetry(providers.images, stylePrompt(hint), subject);
         pendingImages.set(filePath, pending);
         pending.catch(() => undefined).finally(() => pendingImages.delete(filePath));
       }

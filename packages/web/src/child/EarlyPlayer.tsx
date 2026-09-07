@@ -84,6 +84,8 @@ export function EarlyPlayer({ childId, mockMode, onDone }: Props) {
   const [tapReady, setTapReady] = useState(false);
   const [sparkle, setSparkle] = useState(false);
   const [artFailed, setArtFailed] = useState(false);
+  // Whether the drawn picture has arrived; until it does the emoji stands in.
+  const [artLoaded, setArtLoaded] = useState(false);
   const [vignetteAsk, setVignetteAsk] = useState(false);
   const [quizIndex, setQuizIndex] = useState(0);
   const [quizReady, setQuizReady] = useState(false);
@@ -121,21 +123,27 @@ export function EarlyPlayer({ childId, mockMode, onDone }: Props) {
     };
   }, [childId]);
 
-  // Warm the pictures page by page while the child plays: sequential so at
-  // most one FLUX call flies at a time; the server dedups against the <img>.
+  // Warm the pictures while the child plays.
+  //
+  // Fired all at once, not one at a time. The old loop awaited each image
+  // before starting the next specifically to avoid throttling the vendor —
+  // which meant the last card of a deck waited N x ~11s and the child was
+  // asked "where is the cow?" over an empty box. The server now bounds
+  // concurrency globally (story/art.ts) and retries a 429 with the vendor's
+  // own Retry-After, so the right place to queue is there, not here.
+  //
+  // The server also warms this deck when the session starts; these requests
+  // join the SAME in-flight promise rather than duplicating a paid call.
   useEffect(() => {
     if (deck === null) return;
-    let cancelled = false;
+    const controller = new AbortController();
     const urls = [...deck.words.map((w) => w.artUrl), deck.vignette.artUrl];
-    void (async () => {
-      for (const url of urls) {
-        if (cancelled) return;
-        await fetch(url, { credentials: 'same-origin' }).catch(() => undefined);
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
+    void Promise.all(
+      urls.map((url) =>
+        fetch(url, { credentials: 'same-origin', signal: controller.signal }).catch(() => undefined)
+      )
+    );
+    return () => controller.abort();
   }, [deck]);
 
   // --------------------------------------------------------- word card ritual
@@ -147,6 +155,7 @@ export function EarlyPlayer({ childId, mockMode, onDone }: Props) {
     setTapReady(false);
     setSparkle(false);
     setArtFailed(false);
+    setArtLoaded(false);
     setCaption(card.say);
     void (async () => {
       await speak(card.say, mockModeRef.current);
@@ -208,6 +217,7 @@ export function EarlyPlayer({ childId, mockMode, onDone }: Props) {
     setQuizWrongId(null);
     setSparkle(false);
     setArtFailed(false);
+    setArtLoaded(false);
     const line = `Can you find the ${round.targetWord}? Tap the ${round.targetWord}!`;
     setCaption(line);
     void (async () => {
@@ -276,6 +286,7 @@ export function EarlyPlayer({ childId, mockMode, onDone }: Props) {
     setVignetteAsk(false);
     setSparkle(false);
     setArtFailed(false);
+    setArtLoaded(false);
     void (async () => {
       for (const line of vig.sceneLines) {
         if (cancelled) return;
@@ -436,18 +447,31 @@ export function EarlyPlayer({ childId, mockMode, onDone }: Props) {
           }`}
           aria-label={phase === 'vignette' ? deck.vignette.title : (card?.word ?? 'picture')}
         >
-          {artUrl !== undefined && !artFailed ? (
-            <img
-              src={artUrl}
-              alt=""
-              className="h-64 w-64 object-cover sm:h-80 sm:w-80"
-              onError={() => setArtFailed(true)}
-            />
-          ) : (
-            <div className="flex h-64 w-64 items-center justify-center text-9xl sm:h-80 sm:w-80">
+          {/*
+           * The emoji shows WHILE the picture loads, not only when it fails.
+           *
+           * It used to render only on onError — and a slow response is not an
+           * error, so a child asked "where is the cow?" stared at an empty
+           * white box for the ~11s an illustration takes. The emoji is instant,
+           * it is the right referent, and it is replaced the moment the real
+           * art lands. Never show a two-year-old nothing.
+           */}
+          <div className="relative h-64 w-64 sm:h-80 sm:w-80">
+            <div className="absolute inset-0 flex items-center justify-center text-9xl">
               <span aria-hidden>{emoji}</span>
             </div>
-          )}
+            {artUrl !== undefined && !artFailed && (
+              <img
+                src={artUrl}
+                alt=""
+                className={`absolute inset-0 h-full w-full object-cover transition-opacity duration-300 ${
+                  artLoaded ? 'opacity-100' : 'opacity-0'
+                }`}
+                onLoad={() => setArtLoaded(true)}
+                onError={() => setArtFailed(true)}
+              />
+            )}
+          </div>
           {sparkle && (
             <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
               <span className="pop-in text-7xl" aria-hidden>✨🎉✨</span>
@@ -507,6 +531,7 @@ function QuizTile({
   onTap: () => void;
 }) {
   const [failed, setFailed] = useState(false);
+  const [loaded, setLoaded] = useState(false);
   return (
     <button
       type="button"
@@ -516,18 +541,24 @@ function QuizTile({
       } ${dimmed ? 'opacity-50 saturate-50' : ''}`}
       aria-label={option.word}
     >
-      {failed ? (
-        <div className="flex h-36 w-32 items-center justify-center text-7xl sm:h-44 sm:w-40">
+      {/* Same rule as the main card: the referent is visible immediately, and
+          the drawn picture fades in over it when it arrives. */}
+      <div className="relative h-36 w-32 sm:h-44 sm:w-40">
+        <div className="absolute inset-0 flex items-center justify-center text-7xl">
           <span aria-hidden>{EMOJI[option.id] ?? '🖼️'}</span>
         </div>
-      ) : (
-        <img
-          src={option.artUrl}
-          alt=""
-          className="h-36 w-32 object-cover sm:h-44 sm:w-40"
-          onError={() => setFailed(true)}
-        />
-      )}
+        {!failed && (
+          <img
+            src={option.artUrl}
+            alt=""
+            className={`absolute inset-0 h-full w-full object-cover transition-opacity duration-300 ${
+              loaded ? 'opacity-100' : 'opacity-0'
+            }`}
+            onLoad={() => setLoaded(true)}
+            onError={() => setFailed(true)}
+          />
+        )}
+      </div>
       {celebrated && (
         <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
           <span className="pop-in text-5xl" aria-hidden>✨</span>

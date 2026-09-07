@@ -105,6 +105,41 @@ const backoff = (attempt: number, error: unknown): Promise<void> => {
   return new Promise((resolve) => setTimeout(resolve, Math.min(advised ?? guessed, MAX_BACKOFF_MS)));
 };
 
+
+/**
+ * Generate one image with the global concurrency ceiling, bounded retry and
+ * the vendor's own Retry-After.
+ *
+ * Exported because there are THREE doors, not one. The warm-ahead, retry and
+ * throttling work all landed here for Story Time while `early.ts` and
+ * `lessons.ts` kept their own copies of `generateImage().catch(() => undefined)`
+ * — so First Words and Learn to Read still lost pictures to a 429 with no
+ * retry and no log, which is exactly the bug this module exists to prevent.
+ * One implementation, three callers.
+ */
+export async function generateWithRetry(
+  images: IImageGenerator,
+  hint: string,
+  subject: string,
+  references?: Uint8Array[]
+): Promise<ImageResult> {
+  let lastError: unknown;
+  for (let attempt = 0; attempt <= ART_RETRIES; attempt++) {
+    await acquireSlot();
+    try {
+      return await images.generateImage(hint, subject, { references });
+    } catch (error) {
+      lastError = error;
+      if (!isTransient(error) || attempt === ART_RETRIES) throw error;
+    } finally {
+      releaseSlot();
+    }
+    // Backoff OUTSIDE the slot, so a waiting image can use it meanwhile.
+    await backoff(attempt, lastError);
+  }
+  throw lastError instanceof Error ? lastError : new Error('image generation failed');
+}
+
 export interface PageArtKey {
   storyId: string;
   pageIndex: number;
@@ -171,25 +206,7 @@ export async function ensurePageArt(
     // answers 429 under load, and a swallowed 429 used to lose that page
     // permanently — readiness could then never reach total, so the player
     // waited out its whole cap and played with placeholders.
-    pending = (async (): Promise<ImageResult> => {
-      let lastError: unknown;
-      for (let attempt = 0; attempt <= ART_RETRIES; attempt++) {
-        await acquireSlot();
-        try {
-          return await input.images.generateImage(stylePrompt(input.hint), input.subject, {
-            references: input.references
-          });
-        } catch (error) {
-          lastError = error;
-          if (!isTransient(error) || attempt === ART_RETRIES) throw error;
-        } finally {
-          releaseSlot();
-        }
-        // Backoff OUTSIDE the slot, so a waiting page can use it meanwhile.
-        await backoff(attempt, lastError);
-      }
-      throw lastError instanceof Error ? lastError : new Error('image generation failed');
-    })();
+    pending = generateWithRetry(input.images, stylePrompt(input.hint), input.subject, input.references);
     pendingImages.set(filePath, pending);
     pending.catch(() => undefined).finally(() => pendingImages.delete(filePath));
   }

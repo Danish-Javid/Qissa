@@ -34,6 +34,7 @@ import { z } from 'zod';
 import type { FastifyInstance } from 'fastify';
 import { ctx } from '../context.js';
 import { ART_CACHE_VERSION, stylePrompt } from '../providers/art-style.js';
+import { generateWithRetry } from '../story/art.js';
 import type { ImageResult } from '../providers/interfaces.js';
 import { audit } from '../safety/audit.js';
 import { denyNotFound, ownedChild, requireAuth } from './guards.js';
@@ -235,7 +236,7 @@ export async function lessonRoutes(app: FastifyInstance): Promise<void> {
       if (pending === undefined) {
         // A gift is a celebration, not a noun — say so rather than letting the
         // renderer pick whichever concrete word happens to appear in the prose.
-        pending = providers.images.generateImage(stylePrompt(hint), 'gift');
+        pending = generateWithRetry(providers.images, stylePrompt(hint), 'gift');
         pendingImages.set(filePath, pending);
         pending.catch(() => undefined).finally(() => pendingImages.delete(filePath));
       }
@@ -279,7 +280,7 @@ export async function lessonRoutes(app: FastifyInstance): Promise<void> {
         const hint = `one clear idea a small child can point at: ${params.word} — a warm, friendly picture-book scene, soft rounded shapes, bright gentle colours, no text, no letters`;
         // The exact curriculum word is the subject; never make the offline
         // renderer infer it from prose that also carries the style block.
-        pending = providers.images.generateImage(stylePrompt(hint), params.word);
+        pending = generateWithRetry(providers.images, stylePrompt(hint), params.word);
         pendingImages.set(filePath, pending);
         pending.catch(() => undefined).finally(() => pendingImages.delete(filePath));
       }
