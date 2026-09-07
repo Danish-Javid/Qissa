@@ -189,3 +189,66 @@ describe('hero reference (character consistency)', () => {
     expect(status, 'a missing hero costs consistency, never the story').toEqual({ ready: 3, total: 3 });
   });
 });
+
+describe('transient vendor failures', () => {
+  it('retries a throttled page instead of losing it forever', async () => {
+    // Found by running the app: the endpoint answered 20x HTTP 429 under load,
+    // and a swallowed 429 lost that page permanently — readiness could then
+    // never reach total, so the player waited out its whole cap and played
+    // with placeholders. Two pages of eight were simply missing.
+    const id = storyId();
+    let attempts = 0;
+    const images: IImageGenerator = {
+      name: 'throttled',
+      model: 'throttled',
+      supportsReferences: false,
+      generateImage: vi.fn(async (): Promise<ImageResult> => {
+        attempts += 1;
+        if (attempts === 1) throw new Error('Azure /providers/blackforestlabs failed: HTTP 429');
+        return { image: new Uint8Array([7]), mimeType: 'image/png', costMicroUsd: 1 };
+      })
+    };
+
+    const result = await ensurePageArt({
+      storyId: id,
+      pageIndex: 0,
+      lowBandwidth: false,
+      mock: false,
+      images,
+      hint: 'scene 0',
+      subject: 'page 0'
+    });
+
+    expect(attempts, 'a 429 must be retried').toBe(2);
+    expect(result.image).toEqual(new Uint8Array([7]));
+  });
+
+  it('does not retry a permanent failure', async () => {
+    // A bad deployment name or malformed prompt will fail identically every
+    // time; retrying only burns seconds a child is waiting through.
+    const id = storyId();
+    let attempts = 0;
+    const images: IImageGenerator = {
+      name: 'broken',
+      model: 'broken',
+      supportsReferences: false,
+      generateImage: vi.fn(async (): Promise<ImageResult> => {
+        attempts += 1;
+        throw new Error('Unknown FLUX model "nope" (see FLUX_PATHS)');
+      })
+    };
+
+    await expect(
+      ensurePageArt({
+        storyId: id,
+        pageIndex: 1,
+        lowBandwidth: false,
+        mock: false,
+        images,
+        hint: 'scene 1',
+        subject: 'page 1'
+      })
+    ).rejects.toThrow();
+    expect(attempts, 'a permanent error must fail fast').toBe(1);
+  });
+});

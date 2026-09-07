@@ -20,6 +20,7 @@
  */
 import type { Env } from '../../config.js';
 import { assertStoryShape, buildStoryPrompt } from '../story-prompt.js';
+import { RateLimitError } from '../interfaces.js';
 import type {
   GeneratedStory,
   IImageGenerator,
@@ -52,8 +53,16 @@ async function azureFetch(
   try {
     const response = await fetch(url, { ...init, signal: controller.signal });
     if (!response.ok) {
+      const where = `Azure ${new URL(url).pathname} failed: HTTP ${response.status}`;
+      if (response.status === 429) {
+        // Retry-After is seconds (or an HTTP date); pass the vendor's own
+        // number through rather than guessing a backoff curve.
+        const header = response.headers.get('retry-after');
+        const seconds = header === null ? NaN : Number(header);
+        throw new RateLimitError(where, Number.isFinite(seconds) ? seconds * 1000 : undefined);
+      }
       // Body may contain request ids — never the key.
-      throw new Error(`Azure ${new URL(url).pathname} failed: HTTP ${response.status}`);
+      throw new Error(where);
     }
     return response;
   } finally {

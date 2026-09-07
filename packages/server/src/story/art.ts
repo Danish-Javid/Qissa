@@ -18,6 +18,7 @@
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { ART_CACHE_VERSION, stylePrompt } from '../providers/art-style.js';
+import { RateLimitError } from '../providers/interfaces.js';
 import type { IImageGenerator, ImageResult } from '../providers/interfaces.js';
 
 /** On-disk illustration cache — images persist across rebuilds and are
@@ -40,6 +41,69 @@ const pendingImages = new Map<string, Promise<ImageResult>>();
  * without hammering the endpoint hard enough to invite throttling.
  */
 const ART_CONCURRENCY = 4;
+
+/**
+ * A GLOBAL ceiling on concurrent image generations, not a per-story one.
+ *
+ * Found by running the app: two stories warming at once put eight calls plus
+ * two hero references against the endpoint, which answered with twenty HTTP
+ * 429s. Per-story concurrency multiplies by the number of children reading —
+ * exactly the wrong direction — so the limit belongs to the process.
+ */
+// Two, not four. Measured: at four the endpoint returned twenty 429s, and
+// even at four with retries one page of eight still died throttled. FLUX.2
+// [pro] on a shared Foundry resource simply does not take four at once.
+// Eight pages two-wide is ~52s of background drawing, which the readiness
+// gate absorbs — a slower warm that always finishes beats a fast one that
+// loses a page.
+const ART_GLOBAL_LIMIT = 2;
+let inFlightGenerations = 0;
+const waiting: (() => void)[] = [];
+
+async function acquireSlot(): Promise<void> {
+  if (inFlightGenerations < ART_GLOBAL_LIMIT) {
+    inFlightGenerations += 1;
+    return;
+  }
+  await new Promise<void>((resolve) => waiting.push(resolve));
+  inFlightGenerations += 1;
+}
+
+function releaseSlot(): void {
+  inFlightGenerations -= 1;
+  waiting.shift()?.();
+}
+
+/** How many times a transient vendor failure is retried before we give up.
+ *  Six, because throttling here is per-minute: a budget that expires in ten
+ *  seconds cannot outlast it, which is exactly how a page was lost. */
+const ART_RETRIES = 6;
+
+/** Is this worth trying again? Throttling and vendor 5xx are transient by
+ *  definition; a malformed prompt or a bad deployment name is not, and
+ *  retrying those just burns time a child is waiting through. */
+function isTransient(error: unknown): boolean {
+  if (error instanceof RateLimitError) return true;
+  const message = error instanceof Error ? error.message : String(error);
+  return /\b(429|500|502|503|504)\b/.test(message) || /timed out|aborted|ECONNRESET|fetch failed/i.test(message);
+}
+
+/** Cap on a single wait, so a hostile Retry-After cannot park a page forever. */
+const MAX_BACKOFF_MS = 30_000;
+
+/**
+ * How long to wait before trying again.
+ *
+ * The vendor's own Retry-After wins when it sends one — it knows when its
+ * window resets and we are guessing. Otherwise exponential with jitter, so a
+ * whole wave of throttled pages does not retry in lockstep and throttle
+ * itself again.
+ */
+const backoff = (attempt: number, error: unknown): Promise<void> => {
+  const advised = error instanceof RateLimitError ? error.retryAfterMs : undefined;
+  const guessed = 2000 * 2 ** attempt * (0.75 + Math.random() * 0.5);
+  return new Promise((resolve) => setTimeout(resolve, Math.min(advised ?? guessed, MAX_BACKOFF_MS)));
+};
 
 export interface PageArtKey {
   storyId: string;
@@ -103,10 +167,29 @@ export async function ensurePageArt(
   let pending = pendingImages.get(filePath);
   if (pending === undefined) {
     // The scene hint is merged with the house art direction so every provider
-    // draws in the same warm world.
-    pending = input.images.generateImage(stylePrompt(input.hint), input.subject, {
-      references: input.references
-    });
+    // draws in the same warm world. Retried on transient failure: the endpoint
+    // answers 429 under load, and a swallowed 429 used to lose that page
+    // permanently — readiness could then never reach total, so the player
+    // waited out its whole cap and played with placeholders.
+    pending = (async (): Promise<ImageResult> => {
+      let lastError: unknown;
+      for (let attempt = 0; attempt <= ART_RETRIES; attempt++) {
+        await acquireSlot();
+        try {
+          return await input.images.generateImage(stylePrompt(input.hint), input.subject, {
+            references: input.references
+          });
+        } catch (error) {
+          lastError = error;
+          if (!isTransient(error) || attempt === ART_RETRIES) throw error;
+        } finally {
+          releaseSlot();
+        }
+        // Backoff OUTSIDE the slot, so a waiting page can use it meanwhile.
+        await backoff(attempt, lastError);
+      }
+      throw lastError instanceof Error ? lastError : new Error('image generation failed');
+    })();
     pendingImages.set(filePath, pending);
     pending.catch(() => undefined).finally(() => pendingImages.delete(filePath));
   }
@@ -118,6 +201,21 @@ export async function ensurePageArt(
 export interface StoryArtPage {
   hint: string;
   subject: string;
+}
+
+/**
+ * What the warmer managed to draw, and why anything failed.
+ *
+ * Returned rather than swallowed. The first version caught every page error
+ * with `.catch(() => undefined)`, so when a page came back missing there was
+ * nothing in the logs to say whether it was throttling, a content filter or a
+ * bad deployment — the pipeline failed silently and the only symptom was a
+ * readiness count that never reached total. A caller logs this.
+ */
+export interface WarmResult {
+  drawn: number;
+  total: number;
+  failures: { pageIndex: number; error: string }[];
 }
 
 /**
@@ -205,7 +303,9 @@ export async function storyArtStatus(
 }
 
 /**
- * Draw every page of a story, ART_CONCURRENCY at a time.
+ * Draw every page of a story. Workers fan out per story, but the GLOBAL
+ * semaphore is what actually bounds vendor concurrency, so two children
+ * reading at once cannot double the load the endpoint sees.
  *
  * Fire-and-forget by design: the caller returns the story immediately and the
  * book fills in behind it. Individual failures are swallowed — a missing
@@ -220,7 +320,7 @@ export async function warmStoryArt(input: {
   mock: boolean;
   /** Identity anchor for every page. Omit for art with no recurring character. */
   hero?: { childId: string; heroName: string };
-}): Promise<void> {
+}): Promise<WarmResult> {
   await mkdir(illustrationDir, { recursive: true });
 
   // Draw the hero BEFORE the pages, and serially: the pages all condition on
@@ -235,22 +335,30 @@ export async function warmStoryArt(input: {
         );
 
   const queue = input.pages.map((page, pageIndex) => ({ ...page, pageIndex }));
+  const failures: { pageIndex: number; error: string }[] = [];
   const worker = async (): Promise<void> => {
     for (;;) {
       const next = queue.shift();
       if (next === undefined) return;
-      await ensurePageArt({
-        storyId: input.storyId,
-        pageIndex: next.pageIndex,
-        lowBandwidth: input.lowBandwidth,
-        mock: input.mock,
-        images: input.images,
-        hint: next.hint,
-        subject: next.subject,
-        references
-      }).catch(() => undefined);
+      try {
+        await ensurePageArt({
+          storyId: input.storyId,
+          pageIndex: next.pageIndex,
+          lowBandwidth: input.lowBandwidth,
+          mock: input.mock,
+          images: input.images,
+          hint: next.hint,
+          subject: next.subject,
+          references
+        });
+      } catch (error) {
+        // A missing picture degrades that page to text-only and must never
+        // fail the story — but it must not vanish either.
+        failures.push({ pageIndex: next.pageIndex, error: error instanceof Error ? error.message : String(error) });
+      }
     }
   };
 
   await Promise.all(Array.from({ length: Math.min(ART_CONCURRENCY, queue.length) }, () => worker()));
+  return { drawn: input.pages.length - failures.length, total: input.pages.length, failures };
 }

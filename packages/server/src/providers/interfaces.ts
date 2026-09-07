@@ -20,6 +20,25 @@
  */
 import type { LegalLexicon, StoryChoice, StoryConstraints, StoryPage } from '@qissa/core';
 
+/**
+ * A vendor said "not now" — throttling, with a hint of how long to wait.
+ *
+ * Distinct from a generic failure because the correct response is different:
+ * a 429 must be retried, and the vendor's own Retry-After is a far better
+ * delay than any backoff curve we invent. Measured on the configured FLUX.2
+ * endpoint, a fixed ~10s backoff was not enough and lost a page per story.
+ */
+export class RateLimitError extends Error {
+  constructor(
+    message: string,
+    /** From the Retry-After header, when the vendor sent one. */
+    readonly retryAfterMs?: number
+  ) {
+    super(message);
+    this.name = 'RateLimitError';
+  }
+}
+
 /** The raw story a generator owes us, before the safety pipeline touches it.
  *  Provenance, level and theme are stamped by the engine, not the vendor. */
 export interface GeneratedStory {
