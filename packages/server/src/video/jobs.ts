@@ -160,8 +160,16 @@ export function enqueueRender(input: EnqueueInput): VideoJob {
   return job;
 }
 
-/** Mark an already-rendered file as a ready job, so status polling works. */
-export function adoptExisting(id: string, childId: string, title: string): VideoJob {
+/**
+ * Mark an already-rendered file as a ready job, so status polling works.
+ *
+ * `startedAt` is the caller's business because this list is ordered by it, and
+ * stamping Date.now() here made a RECOVERED old video sort as the newest thing
+ * the child had: after a restart the dashboard offered a parent the oldest,
+ * shortest song and called it the current one. Callers pass the timestamp of
+ * the audit row that recorded the render, which is the real order.
+ */
+export function adoptExisting(id: string, childId: string, title: string, startedAt = Date.now()): VideoJob {
   const job: VideoJob = {
     id,
     childId,
@@ -169,8 +177,8 @@ export function adoptExisting(id: string, childId: string, title: string): Video
     state: 'ready',
     progress: 1,
     filePath: videoPath(id),
-    startedAt: Date.now(),
-    finishedAt: Date.now()
+    startedAt,
+    finishedAt: startedAt
   };
   jobs.set(id, job);
   return job;

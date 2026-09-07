@@ -70,17 +70,21 @@ function publicJob(job: VideoJob): Record<string, unknown> {
 async function recordedVideo(
   prisma: PrismaClient,
   videoId: string
-): Promise<{ childId: string; title: string } | null> {
+): Promise<{ childId: string; title: string; startedAt: number } | null> {
   const rows = await prisma.auditLog.findMany({
     where: { event: 'video.queued' },
     orderBy: { createdAt: 'desc' },
-    select: { childId: true, detail: true },
+    select: { childId: true, detail: true, createdAt: true },
     take: 200
   });
   for (const row of rows) {
     const detail = row.detail as { videoId?: string; title?: string } | null;
     if (detail?.videoId !== videoId || row.childId === null) continue;
-    return { childId: row.childId, title: detail.title ?? 'Sound song' };
+    return {
+      childId: row.childId,
+      title: detail.title ?? 'Sound song',
+      startedAt: row.createdAt.getTime()
+    };
   }
   return null;
 }
@@ -95,7 +99,7 @@ async function resolveJob(prisma: PrismaClient, videoId: string): Promise<VideoJ
   if (!(await existingVideo(videoId))) return null;
   const recorded = await recordedVideo(prisma, videoId);
   if (recorded === null) return null;
-  return adoptExisting(videoId, recorded.childId, recorded.title);
+  return adoptExisting(videoId, recorded.childId, recorded.title, recorded.startedAt);
 }
 
 /**
@@ -219,7 +223,7 @@ export async function videoRoutes(app: FastifyInstance): Promise<void> {
     const rows = await prisma.auditLog.findMany({
       where: { childId: child.id, event: 'video.queued' },
       orderBy: { createdAt: 'desc' },
-      select: { detail: true },
+      select: { detail: true, createdAt: true },
       take: 50
     });
     for (const row of rows) {
@@ -227,7 +231,9 @@ export async function videoRoutes(app: FastifyInstance): Promise<void> {
       const videoId = detail?.videoId;
       if (videoId === undefined || getJob(videoId) !== undefined) continue;
       if (!(await existingVideo(videoId))) continue;
-      adoptExisting(videoId, child.id, detail?.title ?? 'Sound song');
+      // The audit row's own timestamp, so recovered songs keep their true
+      // order instead of all claiming to be the newest.
+      adoptExisting(videoId, child.id, detail?.title ?? 'Sound song', row.createdAt.getTime());
     }
 
     return { videos: jobsForChild(child.id).map(publicJob) };
