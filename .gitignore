@@ -49,3 +49,9 @@ review-output.md
 
 # Prisma — generated client is derived from schema.prisma, never committed
 packages/server/prisma/generated/
+
+# Rendered videos and their cached narration/art (regenerable, and the
+# narration is synthesized speech about a specific child).
+/packages/server/data/videos/
+/packages/server/data/video-narration/
+/packages/server/data/video-art/

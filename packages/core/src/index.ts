@@ -38,3 +38,7 @@ export * from './i18n/index.js';
 // Learner model — the moat (FR-F)
 export * from './learner/spaced-repetition.js';
 export * from './learner/learner-model.js';
+
+// Personalized video — the script is compiled here so it stays testable and
+// identical on the server that renders it and the player that previews it.
+export * from './video/script.js';

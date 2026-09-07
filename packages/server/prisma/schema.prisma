@@ -14,6 +14,21 @@
 
 generator client {
   provider = "prisma-client-js"
+
+  // Engine binaries are declared, not detected, because detection is wrong in
+  // a slim container.
+  //
+  // Prisma picks its engine by sniffing the OpenSSL version of the machine it
+  // GENERATES on. node:24-bookworm-slim ships no `openssl` binary, so
+  // detection silently fell back to debian-openssl-1.1.x — and the runtime
+  // image, which installs libssl3 alongside Chrome's dependencies, then looked
+  // for debian-openssl-3.0.x and found nothing. The image built cleanly and
+  // failed on its first query with "could not locate the Query Engine".
+  //
+  //   native                       whatever machine a developer is on
+  //   linux-musl-openssl-3.0.x     the alpine `runtime` target
+  //   debian-openssl-3.0.x         the glibc `runtime-video` target
+  binaryTargets = ["native", "linux-musl-openssl-3.0.x", "debian-openssl-3.0.x"]
 }
 
 datasource db {

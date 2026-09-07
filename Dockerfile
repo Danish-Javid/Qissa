@@ -19,6 +19,7 @@ WORKDIR /srv/qissa
 COPY package.json package-lock.json ./
 COPY packages/core/package.json packages/core/
 COPY packages/server/package.json packages/server/
+COPY packages/video/package.json packages/video/
 COPY packages/web/package.json packages/web/
 RUN npm ci
 
@@ -38,6 +39,7 @@ COPY packages packages
 # prisma version from the registry — never let a build do that.
 RUN ./node_modules/.bin/prisma generate --schema packages/server/prisma/schema.prisma \
  && npm run build -w @qissa/core \
+ && npm run build -w @qissa/video \
  && npm run build -w @qissa/server \
  && npm run build -w @qissa/web
 
@@ -49,6 +51,7 @@ ENV NODE_ENV=production
 COPY package.json package-lock.json ./
 COPY packages/core/package.json packages/core/
 COPY packages/server/package.json packages/server/
+COPY packages/video/package.json packages/video/
 COPY packages/web/package.json packages/web/
 # The generated Prisma client must exist in THIS node_modules tree — the
 # build stage's generation does not survive a fresh install. The schema is
@@ -69,6 +72,13 @@ COPY --from=prod-deps /srv/qissa/node_modules ./node_modules
 COPY --from=build /srv/qissa/package.json ./package.json
 COPY --from=build /srv/qissa/packages/core/dist ./packages/core/dist
 COPY --from=build /srv/qissa/packages/core/package.json ./packages/core/package.json
+COPY --from=build /srv/qissa/packages/video/dist ./packages/video/dist
+COPY --from=build /srv/qissa/packages/video/package.json ./packages/video/package.json
+# Remotion's bundler compiles the compositions from TYPESCRIPT SOURCE at render
+# time, so unlike every other package here the video sources must ship in the
+# image, not just its dist. src/render.ts resolves the entry point relative to
+# its own module, so this layout is what it expects.
+COPY --from=build /srv/qissa/packages/video/src ./packages/video/src
 COPY --from=build /srv/qissa/packages/server/dist ./packages/server/dist
 COPY --from=build /srv/qissa/packages/server/package.json ./packages/server/package.json
 COPY --from=build /srv/qissa/packages/server/prisma ./packages/server/prisma
@@ -94,3 +104,81 @@ HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 \
 # track art) into the qissa-data volume via symlinks, so they genuinely
 # survive container rebuilds as promised in docker-compose.yml.
 CMD ["sh", "-c", "mkdir -p data && for d in audio illustrations early-art; do mkdir -p data-runtime/$d && rm -rf data/$d && ln -sfn ../data-runtime/$d data/$d; done && ./node_modules/.bin/prisma migrate deploy --schema packages/server/prisma/schema.prisma && node packages/server/dist/index.js"]
+
+# ---------- Stage 5: runtime WITH video rendering ----------------------------
+#
+# A second, deliberately separate target. Remotion renders by driving a headless
+# Chrome, and Chrome does not run on Alpine — Remotion's own docs list Alpine as
+# unsupported "due to unsupported Libc symbols" (musl). Rendering therefore
+# needs a glibc base.
+#
+# The default `runtime` target above stays on alpine, and that is the point:
+# this image is larger and has a wider attack surface, so an operator who does
+# not want personalized video should not be made to run it. Video is opt-in
+# twice over — this image, and VIDEO_ENABLED — because it is also opt-in
+# legally: Remotion is free for individuals and companies of up to three
+# people and requires a paid company licence beyond that.
+#
+#   docker build --target runtime-video -t qissa:video .
+#
+# Production dependencies installed on GLIBC, which this image genuinely needs
+# rather than reusing the alpine `prod-deps` tree.
+#
+# Both Remotion and Prisma ship PLATFORM-SPECIFIC native binaries chosen at
+# install time: Remotion's compositor resolves to a musl or a gnu build via
+# optional dependencies, and Prisma generates its query engine for whatever
+# libc it is generating on. Copying the alpine tree into a Debian image would
+# put musl binaries in a glibc container — an image that builds cleanly and
+# then fails at the first render and the first query.
+FROM node:24-bookworm-slim AS prod-deps-gnu
+WORKDIR /srv/qissa
+ENV NODE_ENV=production
+
+COPY package.json package-lock.json ./
+COPY packages/core/package.json packages/core/
+COPY packages/server/package.json packages/server/
+COPY packages/video/package.json packages/video/
+COPY packages/web/package.json packages/web/
+COPY packages/server/prisma packages/server/prisma
+RUN npm ci --omit=dev \
+ && ./node_modules/.bin/prisma generate --schema packages/server/prisma/schema.prisma
+
+FROM node:24-bookworm-slim AS runtime-video
+WORKDIR /srv/qissa
+ENV NODE_ENV=production
+
+# Chrome's shared-library dependencies, per Remotion's Linux requirements.
+# Remotion downloads and manages its own Chrome Headless Shell and ffmpeg
+# binaries, so neither is installed here — only the libraries they link.
+RUN apt-get update \
+ && apt-get install -y --no-install-recommends \
+      ca-certificates fonts-liberation wget \
+      libnss3 libdbus-1-3 libatk1.0-0 libatk-bridge2.0-0 libcups2 \
+      libdrm2 libxkbcommon0 libxcomposite1 libxdamage1 libxfixes3 \
+      libxrandr2 libgbm1 libpango-1.0-0 libcairo2 libasound2 libatspi2.0-0 \
+ && rm -rf /var/lib/apt/lists/*
+
+COPY --from=prod-deps-gnu /srv/qissa/node_modules ./node_modules
+COPY --from=build /srv/qissa/package.json ./package.json
+COPY --from=build /srv/qissa/packages/core/dist ./packages/core/dist
+COPY --from=build /srv/qissa/packages/core/package.json ./packages/core/package.json
+COPY --from=build /srv/qissa/packages/video/dist ./packages/video/dist
+COPY --from=build /srv/qissa/packages/video/package.json ./packages/video/package.json
+COPY --from=build /srv/qissa/packages/video/src ./packages/video/src
+COPY --from=build /srv/qissa/packages/server/dist ./packages/server/dist
+COPY --from=build /srv/qissa/packages/server/package.json ./packages/server/package.json
+COPY --from=build /srv/qissa/packages/server/prisma ./packages/server/prisma
+COPY --from=build /srv/qissa/packages/web/dist ./packages/web/dist
+
+RUN mkdir -p /srv/qissa/data-runtime \
+ && chown -R node:node /srv/qissa
+USER node
+
+EXPOSE 3000
+
+HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 \
+  CMD wget -qO- http://127.0.0.1:3000/api/health || exit 1
+
+# Same startup as `runtime`, plus the video caches in the symlink list so
+# rendered songs and their narration survive a container rebuild.
+CMD ["sh", "-c", "mkdir -p data && for d in audio illustrations early-art videos video-narration video-art; do mkdir -p data-runtime/$d && rm -rf data/$d && ln -sfn ../data-runtime/$d data/$d; done && ./node_modules/.bin/prisma migrate deploy --schema packages/server/prisma/schema.prisma && node packages/server/dist/index.js"]

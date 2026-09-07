@@ -34,6 +34,7 @@ import { healthRoutes, metricsRoutes } from './routes/health.js';
 import { lessonRoutes } from './routes/lessons.js';
 import { sessionRoutes } from './routes/sessions.js';
 import { storyRoutes } from './routes/stories.js';
+import { videoRoutes } from './routes/videos.js';
 import { voiceRoutes } from './routes/voice.js';
 
 export async function buildApp(appCtx: AppContext): Promise<FastifyInstance> {
@@ -101,6 +102,9 @@ export async function buildApp(appCtx: AppContext): Promise<FastifyInstance> {
     await api.register(storyRoutes, { prefix: '/stories' });
     await api.register(sessionRoutes, { prefix: '/sessions' });
     await api.register(digestRoutes, { prefix: '/children' });
+    // Rendering is opt-in: Remotion needs a company licence beyond three
+    // people, so the surface does not exist unless VIDEO_ENABLED says so.
+    if (appCtx.env.VIDEO_ENABLED) await api.register(videoRoutes, { prefix: '/videos' });
     await api.register(voiceRoutes, { prefix: '/' });
     await api.register(healthRoutes);
 

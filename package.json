@@ -2,7 +2,7 @@
   "name": "qissa",
   "version": "0.1.0",
   "private": true,
-  "description": "Qissa — AI early-literacy companion for children in Lahore and beyond. Pedagogy is deterministic code; the LLM only ever generates language.",
+  "description": "Qissa \u2014 AI early-literacy companion for children in Lahore and beyond. Pedagogy is deterministic code; the LLM only ever generates language.",
   "type": "module",
   "license": "UNLICENSED",
   "engines": {
@@ -13,7 +13,7 @@
   ],
   "scripts": {
     "dev": "concurrently -n server,web -c blue,green \"npm run dev -w @qissa/server\" \"npm run dev -w @qissa/web\"",
-    "build": "npm run build -w @qissa/core && npm run build -w @qissa/server && npm run build -w @qissa/web",
+    "build": "npm run build -w @qissa/core && npm run build -w @qissa/video && npm run build -w @qissa/server && npm run build -w @qissa/web",
     "test": "npm run test -w @qissa/core && npm run test -w @qissa/server && npm run test -w @qissa/web",
     "lint": "eslint .",
     "format": "prettier --write .",
@@ -24,7 +24,8 @@
     "seed": "npm run seed -w @qissa/server",
     "verify:providers": "npm run verify:providers -w @qissa/server",
     "review": "npm run review -w @qissa/server",
-    "check": "npm run lint && npm run test && npm run build"
+    "check": "npm run lint && npm run test && npm run build",
+    "studio": "npm run studio -w @qissa/video"
   },
   "devDependencies": {
     "@eslint/js": "^9.39.5",

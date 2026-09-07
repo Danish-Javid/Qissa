@@ -102,6 +102,25 @@ const EnvSchema = z.object({
   // the generator entirely (useful for a zero-spend rehearsal).
   DAILY_STORY_BUDGET_PER_CHILD: z.coerce.number().int().min(0).max(500).default(40),
 
+  // --- Personalized video (@qissa/video) -------------------------------------
+  // Whether the "make a song" surface exists at all. Off by default: rendering
+  // needs Remotion, which is free for individuals and companies of up to three
+  // people and requires a paid company licence beyond that, so it must be an
+  // explicit choice by whoever deploys rather than something that switches
+  // itself on. See research/12-personalized-video.md.
+  VIDEO_ENABLED: z
+    .enum(['true', 'false'])
+    .default('false')
+    .transform((v) => v === 'true'),
+  // Render workers. Remotion counts the HOST's cores, which in a CPU-limited
+  // container oversubscribes the cgroup and thrashes; set this to the limit.
+  // Empty leaves the choice to Remotion, which is right on a dev machine.
+  VIDEO_RENDER_CONCURRENCY: z
+    .string()
+    .optional()
+    .transform((v) => (v === undefined || v === '' ? null : Number(v)))
+    .pipe(z.number().int().min(1).max(32).nullable()),
+
   SEED_PARENT_EMAIL: z.string().default('demo@qissa.app'),
   // Deliberately NO default. This repository is public, so any password written
   // here is a published credential for every deployment that follows the

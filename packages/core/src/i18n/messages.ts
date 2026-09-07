@@ -217,7 +217,24 @@ const en = {
   'dash.demoControl': 'Demo control',
   'dash.storyArchive': 'Story archive',
   'dash.consentGiven': 'Voice consent: given',
-  'dash.consentMissing': 'Voice consent: not given'
+  'dash.consentMissing': 'Voice consent: not given',
+
+  // Personalized video (@qissa/video). Present only when the server was
+  // started with VIDEO_ENABLED, so the parent never sees a button for a
+  // surface that is not there.
+  'song.title': 'A song of her own',
+  'song.blurb': "One sound, the words {name} can already read, and her own pictures. Made from where she actually is in the curriculum — not a video everyone gets.",
+  'song.make': 'Make the song',
+  'song.remake': 'Make a new one',
+  'song.queued': 'Getting the pictures and the voice ready…',
+  'song.rendering': 'Drawing the song… {percent}',
+  'song.slow': 'This takes a minute or two. You can leave this page and come back.',
+  'song.ready': 'Ready to watch',
+  'song.watch': 'Watch',
+  'song.save': 'Save to your phone',
+  'song.failed': 'That did not finish. You can try again.',
+  'song.none': 'No songs yet.',
+  'song.list': 'Songs made so far'
 } as const;
 
 export type MessageKey = keyof typeof en;
@@ -411,7 +428,21 @@ const ur: Record<MessageKey, string> = {
   'dash.demoControl': 'ڈیمو کنٹرول',
   'dash.storyArchive': 'کہانیوں کا ذخیرہ',
   'dash.consentGiven': 'آواز کی اجازت: دی گئی',
-  'dash.consentMissing': 'آواز کی اجازت: نہیں دی گئی'
+  'dash.consentMissing': 'آواز کی اجازت: نہیں دی گئی',
+
+  'song.title': 'اُس کا اپنا گیت',
+  'song.blurb': 'ایک آواز، وہ الفاظ جو {name} پہلے ہی پڑھ سکتی ہے، اور اُس کی اپنی تصویریں۔ یہ اُسی جگہ سے بنا ہے جہاں وہ نصاب میں اِس وقت ہے — ہر بچے کو ملنے والا ایک ہی گیت نہیں۔',
+  'song.make': 'گیت بنائیں',
+  'song.remake': 'نیا گیت بنائیں',
+  'song.queued': 'تصویریں اور آواز تیار ہو رہی ہیں…',
+  'song.rendering': 'گیت بن رہا ہے… {percent}',
+  'song.slow': 'اِس میں ایک دو منٹ لگتے ہیں۔ آپ یہ صفحہ چھوڑ کر واپس آ سکتے ہیں۔',
+  'song.ready': 'دیکھنے کے لیے تیار',
+  'song.watch': 'دیکھیں',
+  'song.save': 'اپنے فون میں محفوظ کریں',
+  'song.failed': 'یہ مکمل نہیں ہو سکا۔ آپ دوبارہ کوشش کر سکتے ہیں۔',
+  'song.none': 'ابھی کوئی گیت نہیں۔',
+  'song.list': 'اب تک بنائے گئے گیت'
 };
 
 export const messages = { en, ur } as { en: Record<MessageKey, string>; ur: Record<MessageKey, string> };

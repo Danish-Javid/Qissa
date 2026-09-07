@@ -1,0 +1,15 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "outDir": "dist",
+    "rootDir": "src",
+    // Compositions are React components rendered inside headless Chrome, so
+    // this package needs the DOM libs and the JSX transform — but the render
+    // entry point is plain Node, which is why module stays NodeNext rather
+    // than following the web package's bundler resolution.
+    "lib": ["ES2023", "DOM", "DOM.Iterable"],
+    "jsx": "react-jsx"
+  },
+  "include": ["src"],
+  "exclude": ["src/**/*.test.ts", "src/**/*.test.tsx"]
+}

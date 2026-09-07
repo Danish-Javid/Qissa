@@ -2,7 +2,7 @@
   "name": "@qissa/server",
   "version": "0.1.0",
   "private": true,
-  "description": "Qissa API — Fastify 5, Prisma + PostgreSQL, provider abstraction with mock, Alibaba Cloud and Azure AI Foundry implementations. All vendor keys live here; nothing reaches the browser.",
+  "description": "Qissa API \u2014 Fastify 5, Prisma + PostgreSQL, provider abstraction with mock, Alibaba Cloud and Azure AI Foundry implementations. All vendor keys live here; nothing reaches the browser.",
   "type": "module",
   "main": "./dist/index.js",
   "scripts": {
@@ -28,6 +28,7 @@
     "@node-rs/argon2": "^2.0.2",
     "@prisma/client": "~6.19.0",
     "@qissa/core": "*",
+    "@qissa/video": "*",
     "fastify": "^5.5.0",
     "prisma": "~6.19.0",
     "zod": "^4.1.5"

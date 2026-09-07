@@ -20,6 +20,7 @@ import { LanguageToggle } from '../i18n/LanguageToggle.js';
 import { useLocale } from '../i18n/LocaleProvider.js';
 import { ParentPage } from './ParentPage.js';
 import { Buddy } from '../child/Buddy.js';
+import { SongCard } from './SongCard.js';
 
 /**
  * The primer scope — what a Qissa story teaches besides letters. Each line
@@ -254,6 +255,14 @@ export function Dashboard() {
           </ul>
         )}
       </section>
+
+      {/* One song card per child. Placed after the children list rather than
+          inside each card: a render is a minute of work and the card carries a
+          video player, which would make the children list unreadable. The
+          card removes itself when the deployment has no video routes. */}
+      {children.map((child) => (
+        <SongCard key={child.id} childId={child.id} childName={child.name} />
+      ))}
 
       {/* Primer breadth — the "not just an edtech app" promise, made visible
           and honest about how each area is taught. */}

@@ -35,6 +35,35 @@ export function stylePrompt(hint: string): string {
 }
 
 /**
+ * Art direction for a WORD CARD — one object, named by one word.
+ *
+ * ART_DIRECTION above is written for story scenes, where "characters with big
+ * expressive eyes and warm smiles" is exactly right. Applied to a single
+ * object it does something else: asked for "a toe", FLUX returned a whole foot
+ * with a face, arms and a friendly wave. Delightful, and useless as a word
+ * card — the child is being taught which thing the word "toe" names, and the
+ * picture named a mascot.
+ *
+ * So a word card keeps the house palette, mood and no-text rule, and drops the
+ * instruction that gives things faces. Animals still smile; a smiling animal
+ * is still an animal.
+ */
+const OBJECT_DIRECTION = [
+  "children's picture-book illustration for ages 4 to 7",
+  'ONE single subject, centred, whole and clearly recognisable',
+  'shown plainly as the real thing — do NOT add a face, eyes, arms or legs to an object',
+  'bright saturated colors with soft warm lighting',
+  'rounded friendly shapes, flat vector storybook art',
+  'simple uncluttered background, cozy safe happy mood',
+  'no words, no letters, no numbers, no text of any kind in the image'
+].join(', ');
+
+/** Prompt for a single-word picture card ("cat", "toe", "dam"). */
+export function objectPrompt(word: string): string {
+  return `a clear, simple picture of a ${word}. ${OBJECT_DIRECTION}`;
+}
+
+/**
  * Cache-busting version for generated art.
  *
  * Every illustration is cached on disk and deliberately survives container
