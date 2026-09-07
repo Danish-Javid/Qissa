@@ -222,8 +222,13 @@ const en = {
   // Personalized video (@qissa/video). Present only when the server was
   // started with VIDEO_ENABLED, so the parent never sees a button for a
   // surface that is not there.
-  'song.title': 'A song of her own',
-  'song.blurb': "One sound, the words {name} can already read, and her own pictures. Made from where she actually is in the curriculum — not a video everyone gets.",
+  // The child's NAME is in the title, not a pronoun. Two children on one
+  // dashboard produced two identical "A song of her own" headings with no way
+  // to tell them apart -- and Qissa never asks a child's gender, so "her" was
+  // simply wrong on the second card.
+  'song.title': "{name}'s own song",
+  'song.blurb':
+    'One sound, the words {name} can already read, and pictures made to match. Built from exactly where {name} is in the curriculum — not a video everyone gets.',
   'song.make': 'Make the song',
   'song.remake': 'Make a new one',
   'song.queued': 'Getting the pictures and the voice ready…',
@@ -430,8 +435,12 @@ const ur: Record<MessageKey, string> = {
   'dash.consentGiven': 'آواز کی اجازت: دی گئی',
   'dash.consentMissing': 'آواز کی اجازت: نہیں دی گئی',
 
-  'song.title': 'اُس کا اپنا گیت',
-  'song.blurb': 'ایک آواز، وہ الفاظ جو {name} پہلے ہی پڑھ سکتی ہے، اور اُس کی اپنی تصویریں۔ یہ اُسی جگہ سے بنا ہے جہاں وہ نصاب میں اِس وقت ہے — ہر بچے کو ملنے والا ایک ہی گیت نہیں۔',
+  // Urdu conjugates for gender, so "پڑھ سکتی ہے" would gender the child the
+  // same way "her" did. The respectful plural forms (پڑھ لیتے ہیں / ہیں) carry
+  // no gender.
+  'song.title': '{name} کا اپنا گیت',
+  'song.blurb':
+    'ایک آواز، وہ الفاظ جو {name} پہلے ہی پڑھ لیتے ہیں، اور اُنہی کے لیے بنائی گئی تصویریں۔ یہ بالکل اُس جگہ سے بنا ہے جہاں {name} اِس وقت نصاب میں ہیں — ہر بچے کو ملنے والا ایک ہی گیت نہیں۔',
   'song.make': 'گیت بنائیں',
   'song.remake': 'نیا گیت بنائیں',
   'song.queued': 'تصویریں اور آواز تیار ہو رہی ہیں…',

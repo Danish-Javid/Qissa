@@ -15,6 +15,7 @@
 import { createHash } from 'node:crypto';
 import { createReadStream } from 'node:fs';
 import { stat } from 'node:fs/promises';
+import type { PrismaClient } from '@prisma/client';
 import type { LearnerModel, WorldSeed } from '@qissa/core';
 import { z } from 'zod';
 import type { FastifyInstance } from 'fastify';
@@ -24,6 +25,7 @@ import {
   adoptExisting,
   enqueueRender,
   existingVideo,
+  forgetJob,
   getJob,
   jobsForChild,
   videoPath,
@@ -49,6 +51,51 @@ function publicJob(job: VideoJob): Record<string, unknown> {
     error: job.error,
     renderMs: job.renderMs
   };
+}
+
+/**
+ * Recover a video the render queue has forgotten.
+ *
+ * Jobs live in memory, so a restart empties the queue — but a finished render
+ * is a file on the data volume, and the audit row that recorded it is in
+ * Postgres. Without this, every song a parent had made disappeared from the
+ * dashboard on the next deploy while its file sat on disk, and `/file` 404ed.
+ *
+ * The audit log is the right place to read it back from: it already records
+ * videoId, childId and title, it is append-only, and deriving state from it is
+ * exactly how the First Words track recovers its own progress. It also solves
+ * the ownership problem — the job id is a content hash and proves nothing about
+ * whose video it is, so the childId has to come from a trusted record.
+ */
+async function recordedVideo(
+  prisma: PrismaClient,
+  videoId: string
+): Promise<{ childId: string; title: string } | null> {
+  const rows = await prisma.auditLog.findMany({
+    where: { event: 'video.queued' },
+    orderBy: { createdAt: 'desc' },
+    select: { childId: true, detail: true },
+    take: 200
+  });
+  for (const row of rows) {
+    const detail = row.detail as { videoId?: string; title?: string } | null;
+    if (detail?.videoId !== videoId || row.childId === null) continue;
+    return { childId: row.childId, title: detail.title ?? 'Sound song' };
+  }
+  return null;
+}
+
+/**
+ * The in-memory job for an id, adopting a previously rendered file if the
+ * queue has forgotten it. Returns null when there is genuinely nothing.
+ */
+async function resolveJob(prisma: PrismaClient, videoId: string): Promise<VideoJob | null> {
+  const live = getJob(videoId);
+  if (live !== undefined) return live;
+  if (!(await existingVideo(videoId))) return null;
+  const recorded = await recordedVideo(prisma, videoId);
+  if (recorded === null) return null;
+  return adoptExisting(videoId, recorded.childId, recorded.title);
 }
 
 /**
@@ -97,6 +144,12 @@ export async function videoRoutes(app: FastifyInstance): Promise<void> {
       return { video: publicJob(adoptExisting(id, child.id, title)) };
     }
 
+    // The file is NOT on disk. If a job for this id is still remembered as
+    // ready — adopted from an audit row whose file has since gone — it has to
+    // be forgotten, or enqueueRender's idempotency returns that phantom
+    // instead of rendering, and the video can never come back.
+    forgetJob(id);
+
     const job = enqueueRender({
       id,
       childId: child.id,
@@ -111,6 +164,8 @@ export async function videoRoutes(app: FastifyInstance): Promise<void> {
       childId: child.id,
       detail: {
         videoId: id,
+        // Recorded so a restart can rebuild the parent's list from the log.
+        title,
         grapheme: script.targetGrapheme,
         reviewGraphemes: script.reviewGraphemes,
         words: script.words,
@@ -139,8 +194,8 @@ export async function videoRoutes(app: FastifyInstance): Promise<void> {
     const params = parseParams(JobIdParams, request.params, reply);
     if (params === null) return;
 
-    const job = getJob(params.id);
-    if (job === undefined) return denyNotFound(reply);
+    const job = await resolveJob(prisma, params.id);
+    if (job === null) return denyNotFound(reply);
 
     // Ownership is re-proven on the STATUS route too, not just at creation:
     // a job id is guessable in principle, and progress on another family's
@@ -158,6 +213,23 @@ export async function videoRoutes(app: FastifyInstance): Promise<void> {
     const child = await ownedChild(prisma, params.id, request.auth.parent.id);
     if (child === null) return denyNotFound(reply);
 
+    // Rebuild anything the queue forgot across a restart, so the parent's list
+    // reflects the files on the volume rather than only this process's memory.
+    // Ownership is already proven, so the audit rows are read for THIS child.
+    const rows = await prisma.auditLog.findMany({
+      where: { childId: child.id, event: 'video.queued' },
+      orderBy: { createdAt: 'desc' },
+      select: { detail: true },
+      take: 50
+    });
+    for (const row of rows) {
+      const detail = row.detail as { videoId?: string; title?: string } | null;
+      const videoId = detail?.videoId;
+      if (videoId === undefined || getJob(videoId) !== undefined) continue;
+      if (!(await existingVideo(videoId))) continue;
+      adoptExisting(videoId, child.id, detail?.title ?? 'Sound song');
+    }
+
     return { videos: jobsForChild(child.id).map(publicJob) };
   });
 
@@ -165,25 +237,60 @@ export async function videoRoutes(app: FastifyInstance): Promise<void> {
     const params = parseParams(JobIdParams, request.params, reply);
     if (params === null) return;
 
-    const job = getJob(params.id);
-    if (job === undefined || job.state !== 'ready') return denyNotFound(reply);
+    const job = await resolveJob(prisma, params.id);
+    if (job === null || job.state !== 'ready') return denyNotFound(reply);
 
     const child = await ownedChild(prisma, job.childId, request.auth.parent.id);
     if (child === null) return denyNotFound(reply);
 
     const filePath = videoPath(job.id);
+    let size: number;
     try {
       const info = await stat(filePath);
-      // Streamed, not read into memory: a 90-second 1080p song is tens of
-      // megabytes, and buffering one per concurrent viewer is how a small
-      // container runs out of heap.
-      return reply
-        .type('video/mp4')
-        .header('content-length', String(info.size))
-        .header('content-disposition', `inline; filename="qissa-${job.id}.mp4"`)
-        .send(createReadStream(filePath));
+      size = info.size;
     } catch {
       return denyNotFound(reply);
     }
+
+    // Streamed, not read into memory: a minute of 1080p is tens of megabytes,
+    // and buffering one per concurrent viewer is how a small container runs
+    // out of heap.
+    reply
+      .type('video/mp4')
+      .header('accept-ranges', 'bytes')
+      .header('content-disposition', `inline; filename="qissa-${job.id}.mp4"`);
+
+    // Range support is not a nicety here.
+    //
+    // Without it a browser cannot seek — setting currentTime snaps straight
+    // back to where it was — and iOS Safari refuses to play a progressive MP4
+    // AT ALL unless the server answers 206. Since the whole point of this
+    // feature is a video a parent opens on a phone and sends to family, a
+    // route that only ever returns 200 is a route that does not work on the
+    // target device.
+    const rangeHeader = request.headers.range;
+    if (typeof rangeHeader === 'string') {
+      const match = /^bytes=(\d*)-(\d*)$/.exec(rangeHeader.trim());
+      if (match === null) return reply.code(416).header('content-range', `bytes */${size}`).send();
+
+      const [, rawStart = '', rawEnd = ''] = match;
+      // "bytes=-500" means the LAST 500 bytes, not "from 0 to 500" — a player
+      // probing an MP4's moov atom at the end of the file sends exactly that.
+      const suffix = rawStart === '';
+      const start = suffix ? Math.max(0, size - Number(rawEnd)) : Number(rawStart);
+      const end = suffix || rawEnd === '' ? size - 1 : Math.min(Number(rawEnd), size - 1);
+
+      if (!Number.isFinite(start) || !Number.isFinite(end) || start > end || start >= size) {
+        return reply.code(416).header('content-range', `bytes */${size}`).send();
+      }
+
+      return reply
+        .code(206)
+        .header('content-range', `bytes ${start}-${end}/${size}`)
+        .header('content-length', String(end - start + 1))
+        .send(createReadStream(filePath, { start, end }));
+    }
+
+    return reply.header('content-length', String(size)).send(createReadStream(filePath));
   });
 }

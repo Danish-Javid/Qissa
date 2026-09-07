@@ -50,6 +50,22 @@ export function getJob(id: string): VideoJob | undefined {
   return jobs.get(id);
 }
 
+/**
+ * Drop a remembered job, so the next request renders it again.
+ *
+ * Needed because `enqueueRender` is idempotent on the id and trusts THIS map
+ * over the disk. A job left in the map as 'ready' after its file went away —
+ * a pruned volume, a cleanup, a hand-deleted cache — was returned as ready
+ * forever: the file route 404ed and pressing "make" again just handed back the
+ * same phantom, with no way to regenerate short of restarting the process.
+ *
+ * The caller checks the disk (it has to anyway) and calls this when the file
+ * it was promised is not there.
+ */
+export function forgetJob(id: string): void {
+  jobs.delete(id);
+}
+
 export function jobsForChild(childId: string): VideoJob[] {
   return [...jobs.values()].filter((j) => j.childId === childId).sort((a, b) => b.startedAt - a.startedAt);
 }

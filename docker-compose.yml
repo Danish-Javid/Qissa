@@ -5,7 +5,17 @@
 
 services:
   app:
-    build: .
+    build:
+      context: .
+      # PINNED, and it matters. A bare `build: .` uses the LAST stage in the
+      # Dockerfile, so adding the render-capable `runtime-video` stage at the
+      # end silently switched this service from alpine to bookworm-slim --
+      # a wider attack surface, adopted by accident rather than by decision.
+      # Naming the target means a new stage can never move this again.
+      #
+      # For personalized video, layer the override instead:
+      #   docker compose -f docker-compose.yml -f docker-compose.video.yml up --build
+      target: runtime
     ports:
       # LOCAL DEVELOPMENT ONLY. Do not publish this port on an internet-reachable
       # host: there is no TLS and no reverse proxy in front of an app that

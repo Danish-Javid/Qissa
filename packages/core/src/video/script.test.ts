@@ -23,7 +23,14 @@ const seed: WorldSeed = {
   currentChallenge: 'scared of the dark'
 };
 
-/** A child taught everything up to `level` — the normal mid-curriculum case. */
+/**
+ * A child taught everything up to `level` — the normal mid-curriculum case.
+ *
+ * Note what this OVERRIDES: createLearnerModel(level) deliberately leaves
+ * taughtGraphemes empty for a new child ("nothing taught before day one"), and
+ * this helper fills it in. That convenience hid a real defect for a while —
+ * see the "a child on day one" test below, which uses the unmodified model.
+ */
 function childAt(level: number): LearnerModel {
   const model = createLearnerModel(level);
   return { ...model, taughtGraphemes: graphemesUpTo(level) };
@@ -113,8 +120,11 @@ describe('buildPhonicsScript', () => {
   });
 
   it('drops a review sound rather than singing about nothing', () => {
-    // 'zz' has no legal carrier for a level-1 child. A review slot that cannot
-    // be filled must vanish, not become a scene with an empty word.
+    // The invariant is that no review scene is ever wordless — not that any
+    // particular sound is dropped. 'igh' has no DECODABLE carrier for a
+    // level-1 child but does have a picturable one (night), so the fallback
+    // now fills that slot; 'zz' has neither, so it still vanishes. A scene
+    // with an empty word must never be built either way.
     const model = childAt(1);
     const script = buildPhonicsScript({
       model,
@@ -122,10 +132,12 @@ describe('buildPhonicsScript', () => {
       lexicon: lexiconFor(model, 1),
       reviewGraphemes: ['zz', 'igh']
     });
-    expect(script.reviewGraphemes).toEqual([]);
-    for (const scene of script.scenes) {
-      if (scene.kind !== 'review') continue;
-      expect(scene.word).toBeTruthy();
+    expect(script.reviewGraphemes).not.toContain('zz');
+    const reviews = script.scenes.filter((s) => s.kind === 'review');
+    expect(reviews.length).toBe(script.reviewGraphemes.length);
+    for (const scene of reviews) {
+      expect(scene.word, scene.id).toBeTruthy();
+      expect(scene.emoji, scene.id).toBeTruthy();
     }
   });
 
@@ -141,6 +153,48 @@ describe('buildPhonicsScript', () => {
     const model = childAt(1);
     const script = buildPhonicsScript({ model, worldSeed: seed, lexicon: lexiconFor(model, 1) });
     expect(script.version).toBe(VIDEO_SCRIPT_VERSION);
+  });
+
+  it('gives a child on day one a real song, not three scenes', () => {
+    // THE regression this file exists for. A brand-new learner model has an
+    // empty taught set by design, so the decodable lexicon compiles to nothing
+    // and the song came out as intro + sound + outro: 13 seconds, no words, no
+    // blend, no recap. The youngest child — the one this format is most for —
+    // got the emptiest video, and every test above passed because childAt()
+    // back-fills taughtGraphemes and never exercised the real state.
+    const model = createLearnerModel(1);
+    expect(model.taughtGraphemes, 'precondition: day one really is empty').toEqual([]);
+
+    const script = buildPhonicsScript({
+      model,
+      worldSeed: seed,
+      lexicon: lexiconFor(model, model.currentLevel)
+    });
+
+    const words = script.scenes.filter((s) => s.kind === 'word');
+    expect(words.length).toBeGreaterThanOrEqual(2);
+    expect(script.scenes.length).toBeGreaterThanOrEqual(6);
+    expect(script.scenes.map((s) => s.kind)).toContain('recap');
+    // Every word scene still has something to show and something to draw.
+    for (const scene of words) {
+      expect(scene.word, scene.id).toBeTruthy();
+      expect(scene.emoji, scene.id).toBeTruthy();
+      expect(scene.art, scene.id).toBeTruthy();
+    }
+  });
+
+  it('prefers decodable words, and only tops up when it must', () => {
+    // Mid-curriculum the differentiator has to hold: these are words she can
+    // actually read, not generic picture words. A level-4 child has plenty.
+    const model = childAt(4);
+    const lexicon = lexiconFor(model, 4);
+    const script = buildPhonicsScript({ model, worldSeed: seed, lexicon });
+    const ctx = { taughtGraphemes: model.taughtGraphemes, taughtTrickyWords: model.taughtTrickyWords };
+    const targetWords = script.scenes.filter((s) => s.kind === 'word').map((s) => s.word ?? '');
+    expect(targetWords.length).toBeGreaterThan(0);
+    for (const word of targetWords) {
+      expect(isWordDecodable(word, ctx), `${word} should be decodable at level 4`).toBe(true);
+    }
   });
 
   it('titles the video by its sound', () => {

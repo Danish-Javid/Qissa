@@ -1,5 +1,10 @@
 /**
- * "A song of her own" — the parent's way to make and watch a phonics video.
+ * "{name}'s own song" — the parent's way to make and watch a phonics video.
+ *
+ * The child's NAME carries the card, never a pronoun. Qissa never asks a
+ * child's gender, and a dashboard with two children rendered two identical
+ * "A song of her own" headings — indistinguishable from each other, and wrong
+ * on the card belonging to a boy.
  *
  * Shaped like the Story Time readiness gate rather than a spinner: rendering
  * takes a minute or two, so the card shows real progress, says plainly how
@@ -94,12 +99,22 @@ export function SongCard({ childId, childName }: { childId: string; childName: s
   if (!available) return null;
 
   const working = job !== null && (job.state === 'queued' || job.state === 'rendering');
-  const ready = job !== null && job.state === 'ready';
 
+  // The song to offer: the one just rendered, or the newest one that already
+  // exists. Without the fallback the card fetched the list, used it only to
+  // pick a button label, and never showed it -- so on any page load after the
+  // render, a parent's finished song had no player and no way to be watched.
+  // The list is ordered newest-first by the server.
+  const latest = job !== null && job.state === 'ready' ? job : (songs.find((s) => s.state === 'ready') ?? null);
+  const ready = !working && latest !== null;
+
+  // Surface treatment matches every other dashboard section. This card was
+  // bg-white/70 + rounded-3xl + shadow-sm, which read as a washed-out, flatter
+  // panel sitting between two crisp ones.
   return (
-    <section className="rounded-3xl bg-white/70 p-6 shadow-sm">
-      <h2 className="text-lg font-semibold text-ink">{tr('song.title')}</h2>
-      <p className="mt-1 max-w-prose text-sm text-ink/70">{tr('song.blurb', { name: childName })}</p>
+    <section className="rounded-2xl bg-white p-6 shadow">
+      <h2 className="text-lg font-bold">{tr('song.title', { name: childName })}</h2>
+      <p className="mb-4 mt-1 max-w-prose text-sm text-ink/60">{tr('song.blurb', { name: childName })}</p>
 
       {working ? (
         <div className="mt-4">
@@ -121,20 +136,23 @@ export function SongCard({ childId, childName }: { childId: string; childName: s
         </div>
       ) : null}
 
-      {ready ? (
+      {ready && latest !== null ? (
         <div className="mt-4">
-          <p className="text-sm font-medium text-ink">{job.title}</p>
+          <p className="text-sm font-medium text-ink">{latest.title}</p>
+          {/* keyed on the id so switching to a newer song reloads the source
+              instead of leaving the previous one in the element */}
           <video
+            key={latest.id}
             className="mt-2 w-full max-w-xl rounded-2xl bg-black shadow"
             controls
             playsInline
             preload="metadata"
-            src={`/api/videos/${job.id}/file`}
+            src={`/api/videos/${latest.id}/file`}
           />
           <a
             className="mt-2 inline-block text-sm font-medium text-clay underline"
-            href={`/api/videos/${job.id}/file`}
-            download={`qissa-${job.id}.mp4`}
+            href={`/api/videos/${latest.id}/file`}
+            download={`qissa-${latest.id}.mp4`}
           >
             {tr('song.save')}
           </a>
@@ -149,7 +167,11 @@ export function SongCard({ childId, childName }: { childId: string; childName: s
         onClick={() => void make()}
         disabled={busy || working}
       >
-        {ready || songs.length > 0 ? tr('song.remake') : tr('song.make')}
+        {/* "Make a new one" only once one actually EXISTS. Counting every job
+            meant the very first render — which is itself queued and therefore
+            in the list — relabelled the button "make a new one" before a
+            single song had ever finished. */}
+        {songs.some((s) => s.state === 'ready') || ready ? tr('song.remake') : tr('song.make')}
       </button>
     </section>
   );

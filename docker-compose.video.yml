@@ -1,0 +1,19 @@
+# Overlay that turns on personalized video (@qissa/video).
+#
+#   docker compose -f docker-compose.yml -f docker-compose.video.yml up --build
+#
+# Separate from docker-compose.yml on purpose. Rendering needs a glibc image
+# (Remotion does not run on Alpine) and a Remotion company licence for a
+# for-profit company of four or more people, so it is a deliberate choice by
+# whoever deploys -- not the default anyone gets by running `up`.
+services:
+  app:
+    build:
+      context: .
+      target: runtime-video
+    environment:
+      VIDEO_ENABLED: "true"
+      # Remotion counts the HOST's cores, so inside a CPU-limited container it
+      # oversubscribes the cgroup and thrashes. Match this to the limit you
+      # actually grant the service.
+      VIDEO_RENDER_CONCURRENCY: "4"

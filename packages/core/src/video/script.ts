@@ -16,7 +16,7 @@ import type { LearnerModel, WorldSeed } from '../types.js';
 import type { LegalLexicon } from '../pedagogy/lexicon.js';
 import { carriersFor } from '../pedagogy/lexicon.js';
 import { graphemesUpTo, phonicsScope } from '../data/index.js';
-import { hasPictogram, pictogramFor } from '../pedagogy/pictogram.js';
+import { hasPictogram, pictogramFor, PICTOGRAMS } from '../pedagogy/pictogram.js';
 import { parseGraphemes } from '../pedagogy/graphemes.js';
 
 /** Script contract version, stamped into provenance like story art. */
@@ -257,6 +257,51 @@ function pickWords(grapheme: string, lexicon: LegalLexicon, taken: Set<string>, 
 }
 
 /**
+ * Picturable words carrying a sound, ignoring whether the child can DECODE
+ * them — the fallback for when the decodable lexicon cannot fill the song.
+ *
+ * This exists because of a real, and badly-placed, failure. A child on her
+ * first day has an EMPTY taught set, so the lexicon re-validates every word to
+ * nothing, and the song came out as three scenes and thirteen seconds: the
+ * letter s, no words, no blend, no recap. The youngest user — the one the
+ * format is most for — got the emptiest video.
+ *
+ * The resolution is that a phonics song is a LISTENING activity, not a
+ * read-along. In the reference video a child hears "A for apple" and sees an
+ * apple; she is not reading the word, and nobody expects her to. The codebase
+ * already draws exactly this line — Story Time passes `decodable: false`
+ * because it is receptive, while the read-along enforces decodability strictly.
+ *
+ * So decodable carriers are still PREFERRED, and for a child mid-curriculum
+ * they are all she gets — that is the part no generic video can do. This only
+ * tops up a song that would otherwise be empty, and only with words that have
+ * a picture, since the picture is what carries the meaning when the print
+ * cannot.
+ */
+function pictureCarriers(grapheme: string, taken: Set<string>, count: number): string[] {
+  return Object.keys(PICTOGRAMS)
+    .filter((w) => !taken.has(w) && w.length >= 2 && w.includes(grapheme))
+    // Initial position first: "s is for sock" is the frame the format wants.
+    // A vowel usually has none ('i' has no initial picturable word at all),
+    // and introduceLine phrases those honestly as "you can hear iii in pin".
+    .sort((a, b) => Number(b.startsWith(grapheme)) - Number(a.startsWith(grapheme)) || a.length - b.length || a.localeCompare(b))
+    .slice(0, count);
+}
+
+/**
+ * The words for the target sound: decodable ones first, topped up with
+ * picturable ones so the song is never empty.
+ */
+function wordsForTarget(grapheme: string, lexicon: LegalLexicon, taken: Set<string>): string[] {
+  const decodable = pickWords(grapheme, lexicon, taken, TARGET_WORDS);
+  for (const w of decodable) taken.add(w);
+  if (decodable.length >= TARGET_WORDS) return decodable;
+  const topUp = pictureCarriers(grapheme, taken, TARGET_WORDS - decodable.length);
+  for (const w of topUp) taken.add(w);
+  return [...decodable, ...topUp];
+}
+
+/**
  * The sound this video teaches: the most recently taught one, since that is
  * what the child is working on now. Falls back to the start of the scope.
  */
@@ -283,8 +328,7 @@ export function buildPhonicsScript(input: PhonicsScriptInput): VideoScript {
   const sound = soundSpelling(target);
 
   const taken = new Set<string>();
-  const targetWords = pickWords(target, lexicon, taken, TARGET_WORDS);
-  for (const w of targetWords) taken.add(w);
+  const targetWords = wordsForTarget(target, lexicon, taken);
 
   // Only revisit sounds that still have a legal word to show. A review slot
   // with nothing to put in it became an empty scene; there is no graceful way
@@ -292,7 +336,7 @@ export function buildPhonicsScript(input: PhonicsScriptInput): VideoScript {
   const reviews: { grapheme: string; word: string }[] = [];
   for (const g of input.reviewGraphemes ?? []) {
     if (g === target || reviews.length >= REVIEW_SOUNDS) continue;
-    const [word] = pickWords(g, lexicon, taken, 1);
+    const [word] = [...pickWords(g, lexicon, taken, 1), ...pictureCarriers(g, taken, 1)];
     if (word === undefined) continue;
     taken.add(word);
     reviews.push({ grapheme: g, word });
