@@ -74,6 +74,48 @@ describe('introduceNextGrapheme', () => {
     const second = introduceNextGrapheme(first.model);
     expect(second.introduced).toBe('a');
   });
+
+  it('introduces a SOUND and nothing else', () => {
+    // Regression: introducing the first level-2 grapheme also granted every
+    // tricky word up to that level — meeting "m" handed the child all eight
+    // level-2 sight words she had never been shown.
+    let model = createLearnerModel(1);
+    const before = [...model.taughtTrickyWords];
+
+    // Walk the whole of level 1 and into level 2, where trickyWords appear.
+    for (let i = 0; i < 8; i++) model = introduceNextGrapheme(model).model;
+
+    expect(model.currentLevel).toBeGreaterThan(1);
+    expect(model.taughtTrickyWords, 'sounds must not grant sight words').toEqual(before);
+  });
+
+  it('leaves the two-new-tricky-words-per-story rule able to fire', () => {
+    // The bulk grant did not merely over-credit: buildStoryConstraints picks
+    // the next tricky words by excluding anything already taught, so marking
+    // them all taught left allowedTrickyWords permanently EMPTY and the
+    // curriculum's "at most two new per story" rule never fired again.
+    let model = createLearnerModel(1);
+    for (let i = 0; i < 8; i++) model = introduceNextGrapheme(model).model;
+
+    const constraints = buildStoryConstraints(model, seed, 5);
+    expect(constraints.allowedTrickyWords.length).toBeGreaterThan(0);
+    expect(constraints.allowedTrickyWords.length).toBeLessThanOrEqual(2);
+    for (const word of constraints.allowedTrickyWords) {
+      expect(model.taughtTrickyWords).not.toContain(word);
+    }
+  });
+
+  it('teaches a tricky word only when something shows it', () => {
+    let model = createLearnerModel(1);
+    for (let i = 0; i < 8; i++) model = introduceNextGrapheme(model).model;
+    const [word] = buildStoryConstraints(model, seed, 5).allowedTrickyWords;
+    expect(word).toBeDefined();
+
+    model = teachTrickyWord(model, word as string);
+    expect(model.taughtTrickyWords).toContain(word);
+    // And the next story then moves on to a different one.
+    expect(buildStoryConstraints(model, seed, 5).allowedTrickyWords).not.toContain(word);
+  });
 });
 
 describe('buildStoryConstraints (Doc 6 §8)', () => {

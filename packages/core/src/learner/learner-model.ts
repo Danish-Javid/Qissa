@@ -150,17 +150,28 @@ export function introduceNextGrapheme(model: LearnerModel, at = new Date()): { m
   }
 
   const levelOfNext = phonicsScope.levels.find((l) => l.graphemes.includes(next))?.level ?? model.currentLevel;
-  const trickyAtLevel = phonicsScope.levels
-    .filter((l) => l.level <= levelOfNext)
-    .flatMap((l) => l.trickyWords.map((w) => w.toLowerCase()))
-    .filter((w) => !model.taughtTrickyWords.includes(w));
 
+  // Introducing a SOUND introduces exactly that sound. It used to also grant
+  // every tricky word up to the new sound's level — so meeting "m" handed the
+  // child all eight level-2 sight words (the, I, a, see, me, no, go, to) she
+  // had never been shown.
+  //
+  // That was two bugs in one. It claimed knowledge the child had not
+  // demonstrated, and — less obviously — it DEFEATED the mechanism meant to
+  // teach those words: buildStoryConstraints picks the next tricky words by
+  // filtering out anything already in taughtTrickyWords, so once the bulk
+  // grant had marked them all taught, `allowedTrickyWords` was permanently
+  // empty and the curriculum's "at most two new tricky words per story" rule
+  // (Doc 6 §2.2) never fired again.
+  //
+  // Tricky words are now taught only where they are actually shown:
+  // serveStory teaches the two its story used, and applyLessonOutcomes
+  // teaches a sight word once the child has said it.
   return {
     model: {
       ...model,
       currentLevel: Math.max(model.currentLevel, levelOfNext),
       taughtGraphemes: [...model.taughtGraphemes, next],
-      taughtTrickyWords: [...model.taughtTrickyWords, ...trickyAtLevel],
       updatedAt: at.toISOString()
     },
     introduced: next
