@@ -36,7 +36,7 @@ export function Digest() {
       <div className="mx-auto max-w-3xl space-y-4 p-6">
         <p className="rounded-xl bg-clay/10 p-4 text-clay">{error}</p>
         <Link to="/parent" className="text-leaf underline">
-          Back to dashboard
+          {tr('common.backToDashboard')}
         </Link>
       </div>
     );

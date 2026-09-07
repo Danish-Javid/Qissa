@@ -9,11 +9,13 @@
  */
 import { useState, type FormEvent } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useLocale } from '../i18n/LocaleProvider.js';
 import { api } from '../api/client.js';
 import type { AuthResponse } from '../api/types.js';
 import { Illustration } from '../lib/Illustration.js';
 
 export function Login() {
+  const { tr } = useLocale();
   const navigate = useNavigate();
   const [mode, setMode] = useState<'login' | 'register'>('login');
   const [email, setEmail] = useState('');
@@ -54,23 +56,22 @@ export function Login() {
           <div>
             <p className="font-story text-3xl font-bold">Qissa</p>
             <p className="mt-2 text-xl font-bold leading-snug">
-              Not a reading app.
+              {tr('login.pitchLine1')}
               <br />
-              Your child's first real book.
+              {tr('login.pitchLine2')}
             </p>
             <p className="mt-3 text-sm leading-relaxed text-white/85">
-              Living stories that teach sounds and words — and weave in numbers, colors, nature and
-              feelings — built fresh for your child every time.
+              {tr('login.pitchBody')}
             </p>
           </div>
           <Illustration             src="/landing/scene-parent.png"
-            alt="A parent and child reading a storybook together"
+            alt={tr('login.illustrationAlt')}
             className="w-full rounded-2xl shadow-lg"
           />
           <ul className="space-y-2 text-sm text-white/90">
-            <li>✓ Every story passes a safety and decodability gate</li>
-            <li>✓ Gentle session caps protect playtime</li>
-            <li>✓ Voice stays private — your consent decides</li>
+            <li>✓ {tr('login.promiseGate')}</li>
+            <li>✓ {tr('login.promiseCap')}</li>
+            <li>✓ {tr('login.promiseVoice')}</li>
           </ul>
         </div>
 
@@ -78,18 +79,18 @@ export function Login() {
         <form onSubmit={(e) => void submit(e)} className="flex flex-col justify-center gap-4 p-8">
           <div>
             <h1 className="text-2xl font-bold">
-              {mode === 'login' ? 'Parent sign-in' : 'Create a parent account'}
+              {mode === 'login' ? tr('login.titleSignIn') : tr('login.titleRegister')}
             </h1>
             <p className="mt-1 text-sm text-ink/60">
               {mode === 'login'
-                ? 'One account for the grown-ups. Children never need a login — they just tap their story.'
-                : 'Qissa accounts belong to the grown-up. Your child never signs in — they just tap their story.'}
+                ? tr('login.blurbSignIn')
+                : tr('login.blurbRegister')}
             </p>
           </div>
 
           {mode === 'register' && (
             <label className="block text-sm font-semibold">
-              Your full name
+              {tr('login.fullName')}
               <input
                 type="text"
                 required
@@ -103,7 +104,7 @@ export function Login() {
             </label>
           )}
           <label className="block text-sm font-semibold">
-            Email
+            {tr('login.email')}
             <input
               type="email"
               required
@@ -114,7 +115,10 @@ export function Login() {
             />
           </label>
           <label className="block text-sm font-semibold">
-            Password {mode === 'register' && <span className="font-normal text-ink/50">(10+ characters)</span>}
+            {tr('login.password')}{' '}
+            {mode === 'register' && (
+              <span className="font-normal text-ink/50">{tr('login.passwordHint')}</span>
+            )}
             <input
               type="password"
               required
@@ -130,9 +134,9 @@ export function Login() {
           {mode === 'register' && (
             <>
               <label className="block text-sm font-semibold">
-                Your date of birth
+                {tr('login.birthDate')}
                 <span className="block text-xs font-normal text-ink/50">
-                  Yours, not your child's — accounts are for grown-ups.
+                  {tr('login.birthDateHint')}
                 </span>
                 <input
                   type="date"
@@ -158,8 +162,7 @@ export function Login() {
                   onChange={(e) => setIsGuardian(e.target.checked)}
                 />
                 <span className="text-ink/75">
-                  I am the parent or legal guardian of the child who will use Qissa, and I consent to
-                  their use of it.
+                  {tr('login.guardian')}
                 </span>
               </label>
             </>
@@ -168,7 +171,7 @@ export function Login() {
           {error !== null && <p className="rounded-lg bg-clay/10 p-2 text-sm text-clay">{error}</p>}
 
           <button type="submit" className="btn-parent w-full py-3" disabled={busy}>
-            {busy ? 'One moment…' : mode === 'login' ? 'Sign in' : 'Create account'}
+            {busy ? tr('login.busy') : mode === 'login' ? tr('login.submitSignIn') : tr('login.submitRegister')}
           </button>
 
           <button
@@ -176,7 +179,7 @@ export function Login() {
             className="w-full text-sm text-leaf underline"
             onClick={() => setMode(mode === 'login' ? 'register' : 'login')}
           >
-            {mode === 'login' ? 'New here? Create an account' : 'Already have an account? Sign in'}
+            {mode === 'login' ? tr('login.switchToRegister') : tr('login.switchToSignIn')}
           </button>
         </form>
       </div>

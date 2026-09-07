@@ -13,29 +13,42 @@
  */
 import { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { modeLabel } from '@qissa/core';
+import { modeLabel, type MessageKey } from '@qissa/core';
 import { api } from '../api/client.js';
 import type { ChildSummary, MeResponse } from '../api/types.js';
 import { LanguageToggle } from '../i18n/LanguageToggle.js';
+import { useLocale } from '../i18n/LocaleProvider.js';
 import { ParentPage } from './ParentPage.js';
 import { Buddy } from '../child/Buddy.js';
 
-/** The primer scope — what a Qissa story teaches besides letters. Each
- *  line says HOW honestly (picture-walk talk / art / home mission), never
- *  overclaiming a curriculum the engine does not enforce. */
-const PRIMER_AREAS = [
-  { icon: '🔤', name: 'Sounds & words', how: 'The engine: one new sound per story, every word decodable, gated for safety.' },
-  { icon: '🗣️', name: 'Spoken language', how: 'A picture-walk builds rich vocabulary and meaning before the child reads.' },
-  { icon: '🎨', name: 'Colors & numbers', how: 'Woven into the picture talk and the art of each story, at the right moment.' },
-  { icon: '🌿', name: 'The living world', how: 'Animals, plants, weather and how things work fold naturally into each tale.' },
-  { icon: '❤️', name: 'Feelings & character', how: 'A rotating values curriculum — courage, kindness, patience — in every theme.' },
-  { icon: '🏠', name: 'Home missions', how: 'Every session ends with a real-world task the family does together.' }
-];
+/**
+ * The primer scope — what a Qissa story teaches besides letters. Each line
+ * says HOW honestly (picture-walk talk / art / home mission), never
+ * overclaiming a curriculum the engine does not enforce.
+ *
+ * Built from the catalog rather than hard-coded. These were English literals
+ * in a module constant, and the language switch lives in this very page's
+ * header — so an Urdu-reading parent flipped the toggle and watched nothing
+ * change. The README claimed the parent layer was "fully translated" while
+ * six of ten files never called t() at all.
+ */
+function primerAreas(tr: (key: MessageKey) => string): { icon: string; name: string; how: string }[] {
+  return [
+    { icon: '🔤', name: tr('dash.breadthSoundsName'), how: tr('dash.breadthSoundsHow') },
+    { icon: '🗣️', name: tr('dash.breadthSpokenName'), how: tr('dash.breadthSpokenHow') },
+    { icon: '🎨', name: tr('dash.breadthColorsName'), how: tr('dash.breadthColorsHow') },
+    { icon: '🌿', name: tr('dash.breadthWorldName'), how: tr('dash.breadthWorldHow') },
+    { icon: '❤️', name: tr('dash.breadthFeelingsName'), how: tr('dash.breadthFeelingsHow') },
+    { icon: '🏠', name: tr('dash.breadthHomeName'), how: tr('dash.breadthHomeHow') }
+  ];
+}
+
 
 const AVATAR_TONES = ['bg-leaf', 'bg-clay', 'bg-sun', 'bg-gold'];
 
 export function Dashboard() {
   const navigate = useNavigate();
+  const { tr, num } = useLocale();
   const [me, setMe] = useState<MeResponse | null>(null);
   const [children, setChildren] = useState<ChildSummary[]>([]);
   // Which child's controls are mid-save, so we can dim + disable them and
@@ -87,8 +100,8 @@ export function Dashboard() {
             <Buddy mood="happy" size={44} />
           </span>
           <div>
-            <h1 className="font-story text-2xl font-bold">Qissa</h1>
-            <p className="text-sm text-white/85">Your child's living primer — {me?.email ?? '…'}</p>
+            <h1 className="font-story text-2xl font-bold">{tr('common.appName')}</h1>
+            <p className="text-sm text-white/85">{tr('dash.tagline', { email: me?.email ?? '…' })}</p>
           </div>
         </div>
         <div className="flex items-center gap-3">
@@ -97,21 +110,21 @@ export function Dashboard() {
               should not have to reach the digest to find it. */}
           <LanguageToggle tone="dark" />
           <button type="button" className="rounded-xl bg-white/20 px-4 py-2 text-sm font-semibold hover:bg-white/30" onClick={() => void logout()}>
-            Sign out
+            {tr('dash.signOut')}
           </button>
         </div>
       </header>
 
       <section className="rounded-2xl bg-white p-6 shadow">
         <div className="mb-4 flex items-center justify-between">
-          <h2 className="text-lg font-bold">Your children</h2>
+          <h2 className="text-lg font-bold">{tr('dash.yourChildren')}</h2>
           <Link to="/parent/setup" className="btn-parent">
-            + Add child
+            {tr('dash.addChild')}
           </Link>
         </div>
         {children.length === 0 ? (
           <p className="text-sm text-ink/60">
-            No children yet — set up a world and the first story will teach the first sounds.
+            {tr('dash.noChildren')}
           </p>
         ) : (
           <ul className="grid gap-4 sm:grid-cols-2">
@@ -126,15 +139,15 @@ export function Dashboard() {
                   </span>
                   <div>
                     <p className="font-bold">{child.name}</p>
-                    <p className="text-xs text-ink/55">Phonics level {child.level}</p>
+                    <p className="text-xs text-ink/55">{tr('dash.phonicsLevel', { level: num(child.level) })}</p>
                   </div>
                 </div>
                 <div className="mt-4 flex gap-2">
                   <Link to={`/child/${child.id}`} className="btn-parent flex-1 bg-leaf text-center">
-                    Read together
+                    {tr('dash.readTogether')}
                   </Link>
                   <Link to={`/parent/digest/${child.id}`} className="btn-parent flex-1 bg-ink/70 text-center">
-                    Progress
+                    {tr('dash.progress')}
                   </Link>
                 </div>
 
@@ -144,15 +157,15 @@ export function Dashboard() {
                     narration pace, and cap the daily session. Collapsed by
                     default so the card stays scannable. */}
                 <details className="mt-3 rounded-xl bg-white/70 p-3">
-                  <summary className="cursor-pointer text-sm font-semibold text-leaf">Modes &amp; controls</summary>
+                  <summary className="cursor-pointer text-sm font-semibold text-leaf">{tr('dash.modesAndControls')}</summary>
                   <div className={`mt-3 space-y-3 ${busyId === child.id ? 'opacity-60' : ''}`}>
                     <p className="text-xs text-ink/60">
-                      Age {child.ageYears} · {modeLabel(child.learningTrack)}
-                      {child.storyTimeEnabled ? ' + Story Time' : ''}
+                      {tr('dash.ageAndDoor', { age: num(child.ageYears), door: modeLabel(child.learningTrack) })}
+                      {child.storyTimeEnabled ? tr('dash.plusStoryTime') : ''}
                     </p>
 
                     <label className="block text-xs font-semibold text-ink/70">
-                      Learning door
+                      {tr('dash.learningDoor')}
                       <select
                         className="mt-1 w-full rounded-lg border border-ink/20 bg-white px-2 py-1.5 text-sm font-normal"
                         value={child.settings.learningTrack ?? 'auto'}
@@ -163,17 +176,17 @@ export function Dashboard() {
                           })
                         }
                       >
-                        <option value="auto">Match age (recommended)</option>
-                        <option value="first-words">First Words (1–2)</option>
-                        <option value="learn-to-read">Learn to Read (3–6)</option>
+                        <option value="auto">{tr('dash.doorAuto')}</option>
+                        <option value="first-words">{tr('dash.doorFirstWords')}</option>
+                        <option value="learn-to-read">{tr('dash.doorLearnToRead')}</option>
                       </select>
                     </label>
 
                     <label className="flex items-center justify-between gap-2 text-xs font-semibold text-ink/70">
                       <span>
-                        Story Time
+                        {tr('dash.storyTime')}
                         <span className="block text-[11px] font-normal text-ink/50">
-                          Narrated stories — listening &amp; watching
+                          {tr('dash.storyTimeHint')}
                         </span>
                       </span>
                       <input
@@ -186,21 +199,21 @@ export function Dashboard() {
                     </label>
 
                     <label className="block text-xs font-semibold text-ink/70">
-                      Story Time pace
+                      {tr('dash.storyTimePace')}
                       <select
                         className="mt-1 w-full rounded-lg border border-ink/20 bg-white px-2 py-1.5 text-sm font-normal"
                         value={child.storyPacing}
                         disabled={busyId === child.id || !child.storyTimeEnabled}
                         onChange={(e) => void updateSettings(child.id, { storyPacing: e.target.value })}
                       >
-                        <option value="fluent">Fluent — like a cartoon</option>
-                        <option value="slow">Slow &amp; gentle</option>
+                        <option value="fluent">{tr('dash.paceFluent')}</option>
+                        <option value="slow">{tr('dash.paceSlow')}</option>
                       </select>
                     </label>
 
                     <label className="flex items-center justify-between gap-2 text-xs font-semibold text-ink/70">
                       <span>
-                        Low-bandwidth mode
+                        {tr('dash.lowBandwidth')}
                         <span className="block text-[11px] font-normal text-ink/50">
                           Simple drawn pictures instead of generated art — much less mobile data
                         </span>
@@ -215,13 +228,13 @@ export function Dashboard() {
                     </label>
 
                     <label className="block text-xs font-semibold text-ink/70">
-                      Daily session cap (minutes)
+                      {tr('dash.dailyCap')}
                       <input
                         type="number"
                         min={1}
                         max={60}
                         className="mt-1 w-full rounded-lg border border-ink/20 bg-white px-2 py-1.5 text-sm font-normal"
-                        placeholder="Server default"
+                        placeholder={tr('dash.serverDefault')}
                         defaultValue={child.sessionCapMinutes ?? ''}
                         disabled={busyId === child.id}
                         onBlur={(e) => {
@@ -245,13 +258,10 @@ export function Dashboard() {
       {/* Primer breadth — the "not just an edtech app" promise, made visible
           and honest about how each area is taught. */}
       <section className="rounded-2xl bg-white p-6 shadow">
-        <h2 className="text-lg font-bold">More than letters — a whole primer</h2>
-        <p className="mb-4 mt-1 text-sm text-ink/60">
-          Reading is the engine. Every story also carries the wider world, in the picture walk, the
-          art and the mission for home.
-        </p>
+        <h2 className="text-lg font-bold">{tr('dash.breadthTitle')}</h2>
+        <p className="mb-4 mt-1 text-sm text-ink/60">{tr('dash.breadthIntro')}</p>
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-          {PRIMER_AREAS.map((area) => (
+          {primerAreas(tr).map((area) => (
             <div key={area.name} className="rounded-xl bg-paper/70 p-4">
               <p className="text-sm font-bold">
                 <span className="mr-1.5" aria-hidden>{area.icon}</span>
@@ -265,12 +275,14 @@ export function Dashboard() {
 
       <footer className="flex justify-between text-sm">
         <Link to="/parent/demo" className="text-leaf underline">
-          Demo control
+          {tr('dash.demoControl')}
         </Link>
         <Link to="/parent/archive" className="text-leaf underline">
-          Story archive
+          {tr('dash.storyArchive')}
         </Link>
-        <span className="text-ink/40">Voice consent: {me?.consentGivenAt ? 'given' : 'not given'}</span>
+        <span className="text-ink/40">
+          {me?.consentGivenAt ? tr('dash.consentGiven') : tr('dash.consentMissing')}
+        </span>
       </footer>
     </ParentPage>
   );
