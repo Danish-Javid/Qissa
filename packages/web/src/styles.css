@@ -360,14 +360,36 @@ details.faq[open] .faq-chev { transform: rotate(180deg); }
 /* Skip link — the first tab stop on every parent screen, visible only when
    focused. The child screens deliberately have none: there is no navigation
    to skip, and nothing there should respond to a stray tab. */
+/*
+ * Skip link, hidden until focused.
+ *
+ * NOT `left: -9999px`. That is the classic off-screen trick and it is
+ * LTR-only: under dir="rtl" the document's scroll origin is the right edge, so
+ * a -9999px child stretched the page to 10,767px against a 768px viewport and
+ * the initial scroll position landed on empty canvas. The Urdu parent
+ * dashboard rendered perfectly and showed a blank screen.
+ *
+ * The clip-rect pattern removes it from view without moving it anywhere, so it
+ * costs the layout nothing in either direction and stays reachable by keyboard
+ * and screen reader.
+ */
 .skip-link {
   position: absolute;
-  left: -9999px;
   top: 0;
+  inset-inline-start: 0;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
   z-index: 50;
 }
 .skip-link:focus {
-  left: 0.75rem;
+  width: auto;
+  height: auto;
+  overflow: visible;
+  clip-path: none;
+  inset-inline-start: 0.75rem;
   top: 0.75rem;
   background: var(--color-ink);
   color: #fff;
